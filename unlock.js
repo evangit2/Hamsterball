@@ -19,6 +19,13 @@ function status(message, busy = false) {
   $('exe-button').disabled = busy;
 }
 
+async function decompressGzip(bytes) {
+  if (typeof DecompressionStream === 'undefined') {
+    throw new Error('This browser is missing a required decompression feature. Use a current Chrome, Edge, Firefox, or Safari release.');
+  }
+  return new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+}
+
 async function unlock(file) {
   status('Checking executable…', true);
   try {
@@ -33,20 +40,28 @@ async function unlock(file) {
     }
 
     status('Loading DirectWebGPU…', true);
-    const payloadResponse = await fetch(manifest.encryptedGuest.url);
+    const payloadUrl = new URL(manifest.encryptedGuest.url, location.href);
+    payloadUrl.searchParams.set('sha256', manifest.encryptedGuest.sha256);
+    const payloadResponse = await fetch(payloadUrl, {cache: 'no-store'});
     if (!payloadResponse.ok) throw new Error(`Could not load game runtime (${payloadResponse.status}).`);
     const payload = await payloadResponse.arrayBuffer();
+    if (payload.byteLength !== manifest.encryptedGuest.bytes || hex(await sha256(payload)) !== manifest.encryptedGuest.sha256) {
+      throw new Error('Downloaded runtime integrity check failed.');
+    }
     const ivBytes = manifest.encryptedGuest.ivBytes;
     const keyMaterial = new Uint8Array(executable.byteLength + KEY_CONTEXT.byteLength);
     keyMaterial.set(new Uint8Array(executable));
     keyMaterial.set(KEY_CONTEXT, executable.byteLength);
     const key = await crypto.subtle.importKey('raw', await sha256(keyMaterial), {name: 'AES-GCM'}, false, ['decrypt']);
     status('Preparing game…', true);
-    const wasm = await crypto.subtle.decrypt(
+    const decrypted = await crypto.subtle.decrypt(
       {name: 'AES-GCM', iv: new Uint8Array(payload, 0, ivBytes)},
       key,
       payload.slice(ivBytes),
     );
+    if (decrypted.byteLength !== manifest.encryptedGuest.decryptedBytes) throw new Error('Runtime payload size check failed.');
+    const wasm = manifest.encryptedGuest.compression === 'gzip' ? await decompressGzip(decrypted) : decrypted;
+    if (wasm.byteLength !== manifest.encryptedGuest.wasmBytes) throw new Error('Runtime size check failed.');
     const wasmSha256 = hex(await sha256(wasm));
     if (wasmSha256 !== manifest.encryptedGuest.plaintextSha256) {
       throw new Error('Runtime integrity check failed.');

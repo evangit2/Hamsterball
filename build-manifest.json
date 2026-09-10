@@ -2465,9 +2465,21 @@
     "url": "generated/hamsterball/hamsterball.payload",
     "algorithm": "AES-256-GCM",
     "ivBytes": 12,
-    "bytes": 25197290,
-    "plaintextBytes": 25197262,
+    "bytes": 4184143,
+    "sha256": "292f652aaefa44c87ebfeffdd38d58f1fd26d59e056bcd28f5e59a09a8b33803",
     "plaintextSha256": "920329702798f7fca05768ce28e42789545e7e924471cf2e3f39322433a5bcbc",
-    "keyDerivation": "SHA-256 of the exact executable bytes followed by DirectWebGPU Hamsterball guest payload v1"
+    "keyDerivation": "SHA-256 of the exact executable bytes followed by DirectWebGPU Hamsterball guest payload v1",
+    "compression": "gzip",
+    "decryptedBytes": 4184115,
+    "wasmBytes": 25197262
+  },
+  "assetBundle": {
+    "url": "assets.bundle.gz",
+    "compression": "gzip",
+    "format": "directwebgpu-assets-v1",
+    "bytes": 7207640,
+    "uncompressedBytes": 17471596,
+    "files": 480,
+    "sha256": "41e341b67b5777c9fc277ac4904401523f0fc02fdf4088ac2c7955bd760758a8"
   }
 }

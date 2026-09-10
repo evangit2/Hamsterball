@@ -7,6 +7,18 @@ const $=id=>document.getElementById(id);
 let build,worker,gpuWorker,timer,probeWorker,inputBinding;
 const selectedMode=runtimeMode(),selectedModeInfo=runtimeModeInfo(selectedMode);
 const gameHarness=document.body.dataset.harness==='game';
+const runtimeEnvironment=()=>({userAgent:navigator.userAgent,platform:navigator.platform,secureContext:isSecureContext,crossOriginIsolated,webgpu:!!navigator.gpu,sharedArrayBuffer:typeof SharedArrayBuffer!=='undefined',offscreenCanvas:typeof OffscreenCanvas!=='undefined',decompressionStream:typeof DecompressionStream!=='undefined'});
+const reportBuild=value=>({revision:value.revision,guest:value.guest,dependencies:value.dependencies,runtimeBuild:value.runtimeBuild,encryptedGuest:value.encryptedGuest,assetBundle:value.assetBundle,fileCount:value.files?.length});
+function prerequisiteError(){
+ if(!isSecureContext)return 'A secure HTTPS page is required.';
+ if(!crossOriginIsolated)return 'Browser isolation is not active. Reload the page once.';
+ if(!navigator.gpu)return 'WebGPU is unavailable. Use a current Chrome or Edge release with hardware acceleration enabled.';
+ if(typeof SharedArrayBuffer==='undefined')return 'SharedArrayBuffer is unavailable in this browser.';
+ if(typeof OffscreenCanvas==='undefined'||typeof HTMLCanvasElement.prototype.transferControlToOffscreen!=='function')return 'This browser cannot run WebGPU in the game worker. Use a current Chrome or Edge release.';
+ if(typeof DecompressionStream==='undefined')return 'This browser is missing the decompression support required by the game bundle.';
+ try{new WebAssembly.Memory({initial:1,maximum:1,shared:true});}catch(_){return 'Shared WebAssembly memory is unavailable in this browser.';}
+ return null;
+}
 class BrowserAudio {
  constructor(){this.context=null;this.master=null;this.volume=1;this.sources=new Set();this.streams=new Map();this.pending=[];this.bytes=0;this.buffers=0;this.writesReceived=0;this.droppedPending=0;this.underruns=0;this.clippedSamples=0;this.peak=0;this.maxQueueAheadMs=0;}
  ensure(){
@@ -48,7 +60,7 @@ function musicDiagnostic(type,data={}){
  if((type!=='music-buffer'||buffers===1)&&new URL(location.href).searchParams.has('debugDiagnostics'))log(type,{message:JSON.stringify(data)});
 }
 function benchmarkDuration(){const value=new URL(location.href).searchParams.get('benchmarkSeconds')??'60';if(!/^\d+$/.test(value)||Number(value)<60||Number(value)>600)throw Error('benchmarkSeconds must be an integer from 60 through 600');return Number(value)*1000;}
-let report={runId:null,status:'idle',runtime:selectedModeInfo,events:[],droppedEvents:0,applicationPresents:0,submittedFrames:0,sceneFrames:0,performance:{firstSceneMs:'not measured',fps:'not measured',jsHeapBytes:'not measured',gpuBytes:'not measured'}};
+let report={runId:null,status:'idle',runtime:selectedModeInfo,environment:runtimeEnvironment(),events:[],droppedEvents:0,applicationPresents:0,submittedFrames:0,sceneFrames:0,performance:{firstSceneMs:'not measured',fps:'not measured',jsHeapBytes:'not measured',gpuBytes:'not measured'}};
 globalThis.directWebGPUReport=()=>structuredClone(report);
 function log(type,data={}){report.events.push({timeMs:Math.round(performance.now()),type,...data});if(report.events.length>250){report.events.shift();report.droppedEvents++}$('logs').textContent=report.events.map(e=>`${e.timeMs} ${e.type}: ${e.message??JSON.stringify(e.result??e)}`).join('\n');$('logs').scrollTop=$('logs').scrollHeight;}
 function stop(status='stopped'){clearTimeout(timer);timer=null;inputBinding?.release();inputBinding?.destroy();inputBinding=null;worker?.terminate();worker=null;gpuWorker?.terminate();gpuWorker=null;browserMusic.reset();browserAudio.reset();report.status=status;report.endedAt=new Date().toISOString();report.diagnosticAttemptMs=report.startTimeMs?performance.now()-report.startTimeMs:0;$('status').textContent=status;$('start').disabled=false;$('long').disabled=false;$('stop').disabled=true;if($('restart'))$('restart').disabled=false;document.body.classList.remove('running')}
@@ -56,16 +68,16 @@ async function start(long=false){
  if(worker||!build||$('start').disabled)return;
  browserAudio.unlock();
  $('start').disabled=true;$('long').disabled=true;
- if(!crossOriginIsolated){$('status').textContent='Cross-origin isolation not active yet — reload the page once (the service worker enables it on the second load).';$('start').disabled=false;$('long').disabled=false;return;}
+ const prerequisite=prerequisiteError();if(prerequisite){report.environment=runtimeEnvironment();report.blocker=prerequisite;$('status').textContent=prerequisite;$('start').disabled=false;$('long').disabled=false;return;}
  try{
   const params=new URL(location.href).searchParams,measurementMs=params.has('benchmark')?benchmarkDuration():null;
   const unlocked=await loadUnlockPayload(build.dependencies.executable.sha256,build.encryptedGuest.plaintextSha256);
   probeWorker?.terminate();probeWorker=null;
-  report={applicationPresents:0,submittedFrames:0,sceneFrames:0,performance:{firstSceneMs:'not measured',fps:'not measured',jsHeapBytes:'not measured',gpuBytes:'not measured'},runtime:selectedModeInfo,runId:crypto.randomUUID(),status:'starting',events:[],droppedEvents:0,build,startTimeMs:performance.now(),startedAt:new Date().toISOString(),requestedDurationMs:long?14400000:new URL(location.href).searchParams.has('benchmark')?measurementMs:null,visibility:document.visibilityState};
+  report={applicationPresents:0,submittedFrames:0,sceneFrames:0,performance:{firstSceneMs:'not measured',fps:'not measured',jsHeapBytes:'not measured',gpuBytes:'not measured'},runtime:selectedModeInfo,environment:runtimeEnvironment(),runId:crypto.randomUUID(),status:'starting',events:[],droppedEvents:0,build:reportBuild(build),startTimeMs:performance.now(),startedAt:new Date().toISOString(),requestedDurationMs:long?14400000:new URL(location.href).searchParams.has('benchmark')?measurementMs:null,visibility:document.visibilityState};
   $('start').disabled=true;$('long').disabled=true;$('stop').disabled=false;if($('restart'))$('restart').disabled=false;$('status').textContent=gameHarness?'Starting…':`Executing original ${build.guest.title} binary…`;document.body.classList.add('running');
   // Keep runtime query parameters in the worker URL so a changed runtime mode
   // cannot reuse a browser-cached worker module from another run.
-  const workerVersion=encodeURIComponent(`${build.runtimeBuild?.sourceSha256??build.runtimeBuild?.builtAt??build.revision}:${location.search}`);
+  const workerVersion=encodeURIComponent(`${build.runtimeBuild?.sourceSha256??build.runtimeBuild?.builtAt??build.revision}:${build.assetBundle?.sha256??'unbundled'}:${location.search}`);
   worker=new Worker(new URL(`./worker.js?guest=${encodeURIComponent(build.guest.id)}&v=${workerVersion}`,import.meta.url),{type:'module'});
   const activeRunId=report.runId;
   worker.onmessage=({data})=>{
@@ -95,12 +107,12 @@ async function start(long=false){
    if(type==='returned')stop('executable returned without verified scene');
    if(type==='gpu-error'||type==='gpu-lost'){report.blocker=rest;stop(type+': '+rest.message)}
   };
-  worker.onerror=e=>{report.blocker=e.message;log('worker-error',{message:e.message});stop('failed: '+e.message)};
+  worker.onerror=e=>{const detail={realm:'CPU worker',message:e.message||e.error?.message||'Worker terminated without an error message',filename:e.filename||null,line:e.lineno||null,column:e.colno||null};report.blocker=detail;log('worker-error',detail);stop('failed: '+detail.message)};
   const oldCanvas=$('scene');const canvas=oldCanvas.cloneNode();oldCanvas.replaceWith(canvas);
   canvas.tabIndex=0;inputBinding=bindBrowserInput(canvas,{isRunning:()=>!!worker,send:message=>gpuWorker?.postMessage({type:'input',message}),unlock:()=>browserAudio.unlock(),debug:message=>{if(params.has('debugInput'))log('input',{message:message.join(',')})},onCaptureChange:(locked,supported)=>{if($('capture'))$('capture').textContent=locked?'Mouse captured':supported?'Capture mouse':'Focus game';document.body.classList.toggle('mouse-captured',locked);}});
   const offscreen=canvas.transferControlToOffscreen();
   const channel=new MessageChannel();gpuWorker=new Worker(new URL(`./gpu-worker.js?guest=${encodeURIComponent(build.guest.id)}&v=${workerVersion}`,import.meta.url),{type:'module'});
-  gpuWorker.onmessage=worker.onmessage;gpuWorker.onerror=worker.onerror;
+  gpuWorker.onmessage=worker.onmessage;gpuWorker.onerror=e=>{const detail={realm:'WebGPU worker',message:e.message||e.error?.message||'WebGPU worker terminated without an error message',filename:e.filename||null,line:e.lineno||null,column:e.colno||null};report.blocker=detail;log('worker-error',detail);stop('failed: '+detail.message)};
   const drawDiagnosticsParam=params.get('drawDiagnostics'),drawStateTraceParam=params.get('drawStateTrace');
   const diagnosticAfterPresentParam=params.get('drawDiagnosticsAfterPresent'),diagnosticSkipParam=params.get('drawDiagnosticsSkip');
   gpuWorker.postMessage({type:'init',runtimeMode:selectedMode,gpuTiming:params.has('gpuTiming'),sceneEquivalenceControl:params.get('sceneEquivalenceControl'),sceneEquivalence:params.has('sceneEquivalence'),canvas:offscreen,port:channel.port1,startEpoch:performance.timeOrigin+report.startTimeMs,drawDiagnostics:drawDiagnosticsParam===null?0:(/^\d+$/.test(drawDiagnosticsParam)?Math.min(64,Number(drawDiagnosticsParam)):3),diagnosticAfterPresent:diagnosticAfterPresentParam&&/^\d+$/.test(diagnosticAfterPresentParam)?Number(diagnosticAfterPresentParam):0,diagnosticSkip:diagnosticSkipParam&&/^\d+$/.test(diagnosticSkipParam)?Math.min(4096,Number(diagnosticSkipParam)):0,drawStateTrace:drawStateTraceParam&&/^\d+$/.test(drawStateTraceParam)?Math.min(256,Number(drawStateTraceParam)):0,captureFrames:params.has('captureFrames'),cameraTest:params.has('cameraTest')},[offscreen,channel.port1]);
@@ -122,7 +134,7 @@ document.addEventListener('visibilitychange',()=>log('visibility',{message:docum
 try{
  const response=await fetch('./build-manifest.json',{cache:'no-store'});
  if(!response.ok)throw Error('build manifest '+response.status);
- build=await response.json();if(!Array.isArray(build.files)||!build.dependencies?.executable||!build.guest?.title)throw Error('invalid build manifest');report.build=build;
+ build=await response.json();if(!Array.isArray(build.files)||!build.dependencies?.executable||!build.guest?.title)throw Error('invalid build manifest');report.build=reportBuild(build);
  $('runtime').textContent=`Runtime: Theseus x86 → WASM · Graphics: ${selectedModeInfo.shaderCompiler} → WebGPU · Mode: ${selectedMode}${selectedModeInfo.deprecated?' (deprecated)':''}`;
  document.title=`${build.guest.title} · DirectWebGPU`;$('title').textContent=gameHarness?build.guest.title:`${build.guest.title} binary runtime`;$('start').textContent=`Start ${build.guest.title}`;$('revision').textContent=`Loading ${build.guest.title} runtime…`;
  $('start').disabled=false;$('long').disabled=false;

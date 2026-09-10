@@ -9,6 +9,24 @@ console.error=(...args)=>{const message=args.map(text).join(' ');if(message.incl
 console.log=(...args)=>send('log',{message:args.map(text).join(' ')});
 console.warn=console.log;
 async function hash(bytes){return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),v=>v.toString(16).padStart(2,'0')).join('')}
+async function unpackAssetBundle(compressed,manifestFiles,bundle){
+ if(typeof DecompressionStream==='undefined'||bundle.compression!=='gzip')throw Error('gzip asset bundles are not supported by this browser');
+ const raw=await new Response(new Blob([compressed]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+ if(raw.byteLength!==bundle.uncompressedBytes)throw Error('asset bundle size mismatch');
+ const view=new DataView(raw);if(raw.byteLength<4)throw Error('asset bundle is truncated');
+ const headerBytes=view.getUint32(0,true),dataOffset=4+headerBytes;
+ if(headerBytes<2||dataOffset>raw.byteLength)throw Error('invalid asset bundle header');
+ const header=JSON.parse(new TextDecoder().decode(new Uint8Array(raw,4,headerBytes)));
+ const expected=new Map(manifestFiles.map(file=>[file.path,file]));
+ if(header.version!==1||!Array.isArray(header.files)||header.files.length!==expected.size)throw Error('asset bundle manifest mismatch');
+ const files=new Map();
+ for(const entry of header.files){
+  const file=expected.get(entry.path);
+  if(!file||file.bytes!==entry.bytes||!Number.isSafeInteger(entry.offset)||entry.offset<0||dataOffset+entry.offset+entry.bytes>raw.byteLength||files.has(entry.path))throw Error('invalid bundled asset: '+entry.path);
+  files.set(entry.path,new Uint8Array(raw,dataOffset+entry.offset,entry.bytes));
+ }
+ return files;
+}
 async function gpuProbe(){
  const result={secureContext:isSecureContext,crossOriginIsolated,sharedArrayBuffer:typeof SharedArrayBuffer!=='undefined',webgpu:!!navigator.gpu,userAgent:navigator.userAgent};
  if(!navigator.gpu)return {...result,hardwareAcceleration:'not verified',reason:'navigator.gpu unavailable'};
@@ -81,7 +99,10 @@ self.onmessage=async({data})=>{
   const suppliedWasm=data.wasmBuffer;
   if(!(suppliedExe instanceof ArrayBuffer)||!(suppliedWasm instanceof ArrayBuffer))throw Error('browser-unlocked executable and runtime are required');
   const cacheFiles=build.files.filter(f=>f.path!==exeFile.path);
-  const cache=new AssetCache(data.assetCache??'warm',cacheFiles.map(f=>({...f,url:assetUrl(f.path)})),caches,fetch.bind(globalThis),location.origin);await cache.open(wasmEntry.sha256);
+  const bundle=build.assetBundle;
+  if(!bundle?.url||!Number.isSafeInteger(bundle.bytes)||!Number.isSafeInteger(bundle.uncompressedBytes)||bundle.files!==cacheFiles.length)throw Error('asset bundle manifest is incomplete');
+  const cache=new AssetCache(data.assetCache??'warm',[{...bundle,url:bundle.url}],caches,fetch.bind(globalThis),location.origin);await cache.open(bundle.sha256);
+  let bundledFiles=await unpackAssetBundle(await cache.load(bundle.url),cacheFiles,bundle);
   const bytes=suppliedExe;
   const actual=await hash(bytes);
   if(actual!==build.dependencies.executable.sha256)throw Error(`original executable hash mismatch: ${actual}`);
@@ -95,10 +116,11 @@ self.onmessage=async({data})=>{
   if(build.runtimeBuild.executableSha256!==actual)throw Error('WASM was built for a different EXE');
   await exe.default({memory,module_or_path:wasmBytes});
   for(const f of build.files){
-   const fileBytes=f.path===exeFile.path?bytes:await cache.load(assetUrl(f.path));
-   if(await hash(fileBytes)!==f.sha256)throw Error('asset integrity mismatch: '+f.path);
+   const fileBytes=f.path===exeFile.path?new Uint8Array(bytes):bundledFiles.get(f.path);
+   if(!fileBytes)throw Error('asset missing from verified bundle: '+f.path);
    exe.mount_file('/'+f.path,new Uint8Array(fileBytes));
   }
+  bundledFiles=null;
   exe.set_current_dir(guest.workingDirectory);
   if(data.resolution==='1280x720'){
    for(const [root,subkey,name,value] of guest.registryDwords??[])exe.seed_registry_dword(root,subkey,name,value);

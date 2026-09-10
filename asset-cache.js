@@ -1,4 +1,4 @@
-const PREFIX='humus-verified-assets-v1-';
+const PREFIX='directwebgpu-verified-assets-v1-';
 export class AssetCache{
  constructor(mode,entries,storage,fetcher,origin){
   if(!['off','cold','warm'].includes(mode))throw Error('invalid asset cache mode');
