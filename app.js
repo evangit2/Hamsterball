@@ -1,9 +1,9 @@
 import {resourceMetrics,memoryProbe} from './resource-metrics.js';
 import {runtimeMode,runtimeModeInfo} from './runtime-mode.js';
 import {BrowserTrackerMusic} from './tracker-music.js';
-import {bindBrowserInput} from './browser-input.js?v=preview-input-11';
+import {bindBrowserInput} from './browser-input.js?v=preview-input-12';
 import {loadUnlockPayload} from './unlock-store.js?v=scoped-runtime-1';
-import {audioQueueNeedsReset} from './audio-scheduling.js?v=preview-input-11';
+import {audioQueueNeedsReset} from './audio-scheduling.js?v=preview-input-12';
 const $=id=>document.getElementById(id);
 let build,worker,gpuWorker,inputWorker,timer,probeWorker,inputBinding;
 const selectedMode=runtimeMode(),selectedModeInfo=runtimeModeInfo(selectedMode);
