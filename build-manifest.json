@@ -1,5 +1,5 @@
 {
-  "revision": "13e2af252d0bc46a3a7e077c552587d5fbfe9c7e",
+  "revision": "89ff41f4c27e1e29348899535e79e1f3d1a836f3",
   "dirty": false,
   "guest": {
     "id": "hamsterball",
@@ -8,15 +8,21 @@
     "workingDirectory": "/",
     "registryDwords": [],
     "inputProfile": {
-      "relativePointer": {
-        "horizontalSign": -1,
-        "verticalSign": -1
-      },
-      "cursorHidden": {
-        "horizontalSign": -1,
-        "verticalSign": -1
+      "pointer": {
+        "cursorHidden": {
+          "horizontalSign": -1,
+          "verticalSign": -1
+        },
+        "relativePointer": {
+          "horizontalSign": -1,
+          "verticalSign": -1
+        }
       },
       "touchJoystick": {
+        "cursorHidden": {
+          "horizontalSign": -1,
+          "verticalSign": -1
+        },
         "relativePointer": {
           "horizontalSign": -1,
           "verticalSign": -1
@@ -36,15 +42,21 @@
       "workingDirectory": "/",
       "registryDwords": [],
       "inputProfile": {
-        "relativePointer": {
-          "horizontalSign": -1,
-          "verticalSign": -1
-        },
-        "cursorHidden": {
-          "horizontalSign": -1,
-          "verticalSign": -1
+        "pointer": {
+          "cursorHidden": {
+            "horizontalSign": -1,
+            "verticalSign": -1
+          },
+          "relativePointer": {
+            "horizontalSign": -1,
+            "verticalSign": -1
+          }
         },
         "touchJoystick": {
+          "cursorHidden": {
+            "horizontalSign": -1,
+            "verticalSign": -1
+          },
           "relativePointer": {
             "horizontalSign": -1,
             "verticalSign": -1
@@ -2469,15 +2481,21 @@
       "workingDirectory": "/",
       "registryDwords": [],
       "inputProfile": {
-        "relativePointer": {
-          "horizontalSign": -1,
-          "verticalSign": -1
-        },
-        "cursorHidden": {
-          "horizontalSign": -1,
-          "verticalSign": -1
+        "pointer": {
+          "cursorHidden": {
+            "horizontalSign": -1,
+            "verticalSign": -1
+          },
+          "relativePointer": {
+            "horizontalSign": -1,
+            "verticalSign": -1
+          }
         },
         "touchJoystick": {
+          "cursorHidden": {
+            "horizontalSign": -1,
+            "verticalSign": -1
+          },
           "relativePointer": {
             "horizontalSign": -1,
             "verticalSign": -1
@@ -2488,10 +2506,10 @@
     "wasmProfile": "release",
     "translatedTreeSha256": "a61cf7b018a7cbddd62c1b3043fc69bd88f8f7c462b08dff87f235f8564ecf73",
     "cargoLockSha256": "968c5d084c3a8ffaae74c4436735dad977229fbde0141ec4279b7d8a134164fd",
-    "builtAt": "2026-09-10T15:57:26.390001+00:00",
-    "revision": "13e2af252d0bc46a3a7e077c552587d5fbfe9c7e",
+    "builtAt": "2026-09-10T16:14:23.820980+00:00",
+    "revision": "89ff41f4c27e1e29348899535e79e1f3d1a836f3",
     "workingTreeDirty": false,
-    "sourceSha256": "e71d16c88b71de07f9a97e15902034f5612b9aafac76ad502a6563912511ab9f",
+    "sourceSha256": "ee88e68a557731742c3bf3f6472dd6e05f919b64372129b8e24e58a99602c0dd",
     "executableSha256": "3379e9041c7ab83abd07da1bcf974529280aeff36b3c52e7a3d3bbb93e2da94d",
     "theseusRevision": "f8c1a2351b8b605812076d2dc34e84d20d95de4b",
     "translationEntryPoints": [],
