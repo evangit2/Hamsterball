@@ -1,0 +1,28 @@
+:root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; background: #000; color: #edf3f8; }
+* { box-sizing: border-box; }
+html, body, main { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+main { display: grid; grid-template-rows: 46px 1fr; background: #000; }
+header { display: flex; align-items: center; gap: 12px; padding: 0 9px 0 14px; border-bottom: 1px solid #29313a; background: #0c1117; }
+header strong { font-size: 14px; }
+#toolbar-status { color: #84919e; font-size: 12px; }
+nav { display: flex; gap: 6px; margin-left: auto; }
+button { min-height: 31px; padding: 0 11px; border: 1px solid #36414c; border-radius: 6px; background: #171e26; color: inherit; font: inherit; cursor: pointer; }
+button:hover { background: #222c36; }
+button:disabled { cursor: default; opacity: .45; }
+#stage { position: relative; min-width: 0; min-height: 0; }
+iframe { width: 100%; height: 100%; border: 0; background: #000; }
+#setup { position: absolute; inset: 0; display: grid; place-items: center; padding: 12px; background: #05070a; }
+#setup[hidden] { display: none; }
+.panel { width: min(360px, 100%); padding: 20px; display: grid; gap: 11px; border: 1px solid #303a44; border-radius: 9px; background: #11171e; }
+.panel.dragging { border-color: #4e9cff; }
+.panel > strong { font-size: 16px; }
+.panel > span { color: #8795a3; font-size: 12px; line-height: 1.35; }
+.start { width: 100%; border-color: #388bff; background: #1769d2; font-weight: 700; }
+progress { width: 100%; accent-color: #388bff; }
+@media (max-width: 520px) {
+  main { grid-template-rows: 42px 1fr; }
+  header { padding-left: 7px; gap: 6px; }
+  header strong { display: none; }
+  nav { gap: 4px; }
+  button { min-height: 29px; padding: 0 7px; font-size: 12px; }
+}
