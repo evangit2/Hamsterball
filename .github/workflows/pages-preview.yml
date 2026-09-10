@@ -1,0 +1,45 @@
+name: Deploy staging preview
+
+on:
+  push:
+    branches: [staging]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}preview/
+    steps:
+      - name: Check out production
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: production
+      - name: Check out staging
+        uses: actions/checkout@v4
+        with:
+          ref: staging
+          path: preview
+      - name: Assemble production and preview
+        run: |
+          mkdir site
+          rsync -a --exclude=.git --exclude=.github production/ site/
+          mkdir site/preview
+          rsync -a --exclude=.git --exclude=.github preview/ site/preview/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
