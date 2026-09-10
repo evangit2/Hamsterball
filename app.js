@@ -1,11 +1,11 @@
 import {resourceMetrics,memoryProbe} from './resource-metrics.js';
 import {runtimeMode,runtimeModeInfo} from './runtime-mode.js';
 import {BrowserTrackerMusic} from './tracker-music.js';
-import {bindBrowserInput} from './browser-input.js?v=preview-input-9';
+import {bindBrowserInput} from './browser-input.js?v=preview-input-10';
 import {loadUnlockPayload} from './unlock-store.js?v=scoped-runtime-1';
-import {audioQueueNeedsReset} from './audio-scheduling.js?v=preview-input-9';
+import {audioQueueNeedsReset} from './audio-scheduling.js?v=preview-input-10';
 const $=id=>document.getElementById(id);
-let build,worker,gpuWorker,timer,probeWorker,inputBinding;
+let build,worker,gpuWorker,inputWorker,timer,probeWorker,inputBinding;
 const selectedMode=runtimeMode(),selectedModeInfo=runtimeModeInfo(selectedMode);
 const gameHarness=document.body.dataset.harness==='game';
 const coarsePointer=globalThis.matchMedia?.('(pointer: coarse)')?.matches??false;
@@ -70,7 +70,7 @@ function log(type,data={}){report.events.push({timeMs:Math.round(performance.now
 function diagnosticsText(){return JSON.stringify({summary:report.status,location:location.href,report},null,2)}
 function downloadDiagnostics(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([diagnosticsText()],{type:'application/json'}));a.download=`${build?.guest?.id??'directwebgpu'}-${report.runId??'probe'}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
 function crashActions(status){const button=$('crash-details');if(!button)return;const crashed=!!report.blocker||/^(failed:|gpu-error:|gpu-lost:|startup watchdog:)/.test(status);button.hidden=!crashed;if(crashed)$('crash-output').textContent=diagnosticsText();}
-function stop(status='stopped'){clearTimeout(timer);timer=null;inputBinding?.release();inputBinding?.destroy();inputBinding=null;worker?.terminate();worker=null;gpuWorker?.terminate();gpuWorker=null;browserMusic.reset();browserAudio.reset();report.status=status;report.endedAt=new Date().toISOString();report.diagnosticAttemptMs=report.startTimeMs?performance.now()-report.startTimeMs:0;$('status').textContent=status;$('start').disabled=false;$('long').disabled=false;$('stop').disabled=true;if($('restart'))$('restart').disabled=false;document.body.classList.remove('running');crashActions(status)}
+function stop(status='stopped'){clearTimeout(timer);timer=null;inputBinding?.release();inputBinding?.destroy();inputBinding=null;worker?.terminate();worker=null;gpuWorker?.terminate();gpuWorker=null;inputWorker?.terminate();inputWorker=null;browserMusic.reset();browserAudio.reset();report.status=status;report.endedAt=new Date().toISOString();report.diagnosticAttemptMs=report.startTimeMs?performance.now()-report.startTimeMs:0;$('status').textContent=status;$('start').disabled=false;$('long').disabled=false;$('stop').disabled=true;if($('restart'))$('restart').disabled=false;document.body.classList.remove('running');crashActions(status)}
 async function start(long=false){
  if(worker||!build||$('start').disabled)return;
  const audioUnlock=browserAudio.unlock();
@@ -116,19 +116,20 @@ async function start(long=false){
    if(rest.wasmLinearMemoryBytes)report.performance.wasmLinearMemoryBytes=rest.wasmLinearMemoryBytes;
    if(type==='failed'){report.blocker=rest.message;const detail=rest.message.replace(/\s+/g,' ').slice(0,1200);stop('failed: '+detail);}
    if(type==='returned')stop('executable returned without verified scene');
-   if(type==='gpu-error'||type==='gpu-lost'){report.blocker=rest;stop(type+': '+rest.message)}
+   if(type==='gpu-error'||type==='gpu-lost'||type==='input-error'){report.blocker=rest;stop(type+': '+rest.message)}
   };
   worker.onerror=e=>{const detail={realm:'CPU worker',message:e.message||e.error?.message||'Worker terminated without an error message',filename:e.filename||null,line:e.lineno||null,column:e.colno||null};report.blocker=detail;log('worker-error',detail);stop('failed: '+detail.message)};
   const oldCanvas=$('scene');const canvas=oldCanvas.cloneNode();oldCanvas.replaceWith(canvas);
   const virtualCursor=({x,y,visible})=>{const marker=$('guest-cursor');if(!marker)return;const activeCanvas=$('scene');if(!visible||!activeCanvas){marker.hidden=true;return;}const canvasRect=activeCanvas.getBoundingClientRect(),stageRect=$('stage').getBoundingClientRect();marker.hidden=false;marker.style.transform=`translate(${canvasRect.left-stageRect.left+x*canvasRect.width/activeCanvas.width}px,${canvasRect.top-stageRect.top+y*canvasRect.height/activeCanvas.height}px)`;};
-  canvas.tabIndex=0;inputBinding=bindBrowserInput(canvas,{isRunning:()=>!!worker,send:message=>gpuWorker?.postMessage({type:'input',message}),unlock:()=>browserAudio.unlock(),profile:build.guest?.inputProfile??{},touchRoot:$('touch-controls'),onVirtualCursor:virtualCursor,onCursorVisibilityChange:visible=>document.body.classList.toggle('guest-cursor-hidden',!visible),debug:message=>{if(params.has('debugInput'))log('input',{message:message.join(',')})},onCaptureChange:(locked,supported)=>{if($('capture'))$('capture').textContent=locked?'Mouse captured':supported?'Capture mouse':'Focus game';document.body.classList.toggle('mouse-captured',locked);}});
+  canvas.tabIndex=0;inputBinding=bindBrowserInput(canvas,{isRunning:()=>!!worker,send:message=>inputWorker?.postMessage({type:'input',message}),unlock:()=>browserAudio.unlock(),profile:build.guest?.inputProfile??{},touchRoot:$('touch-controls'),onVirtualCursor:virtualCursor,onCursorVisibilityChange:visible=>document.body.classList.toggle('guest-cursor-hidden',!visible),debug:message=>{if(params.has('debugInput'))log('input',{message:message.join(',')})},onCaptureChange:(locked,supported)=>{if($('capture'))$('capture').textContent=locked?'Mouse captured':supported?'Capture mouse':'Focus game';document.body.classList.toggle('mouse-captured',locked);}});
   const offscreen=canvas.transferControlToOffscreen();
-  const channel=new MessageChannel();gpuWorker=new Worker(new URL(`./gpu-worker.js?guest=${encodeURIComponent(build.guest.id)}&v=${workerVersion}`,import.meta.url),{type:'module'});
+  const channel=new MessageChannel(),inputChannel=new MessageChannel();gpuWorker=new Worker(new URL(`./gpu-worker.js?guest=${encodeURIComponent(build.guest.id)}&v=${workerVersion}`,import.meta.url),{type:'module'});inputWorker=new Worker(new URL(`./input-worker.js?guest=${encodeURIComponent(build.guest.id)}&v=${workerVersion}`,import.meta.url),{type:'module'});
   gpuWorker.onmessage=worker.onmessage;gpuWorker.onerror=e=>{const detail={realm:'WebGPU worker',message:e.message||e.error?.message||'WebGPU worker terminated without an error message',filename:e.filename||null,line:e.lineno||null,column:e.colno||null};report.blocker=detail;log('worker-error',detail);stop('failed: '+detail.message)};
+  inputWorker.onmessage=worker.onmessage;inputWorker.onerror=e=>{const detail={realm:'input worker',message:e.message||e.error?.message||'Input worker terminated without an error message',filename:e.filename||null,line:e.lineno||null,column:e.colno||null};report.blocker=detail;log('worker-error',detail);stop('failed: '+detail.message)};inputWorker.postMessage({type:'init',port:inputChannel.port1},[inputChannel.port1]);
   const drawDiagnosticsParam=params.get('drawDiagnostics'),drawStateTraceParam=params.get('drawStateTrace');
   const diagnosticAfterPresentParam=params.get('drawDiagnosticsAfterPresent'),diagnosticSkipParam=params.get('drawDiagnosticsSkip');
   gpuWorker.postMessage({type:'init',runtimeMode:selectedMode,gpuTiming:params.has('gpuTiming'),sceneEquivalenceControl:params.get('sceneEquivalenceControl'),sceneEquivalence:params.has('sceneEquivalence'),canvas:offscreen,port:channel.port1,startEpoch:performance.timeOrigin+report.startTimeMs,drawDiagnostics:drawDiagnosticsParam===null?0:(/^\d+$/.test(drawDiagnosticsParam)?Math.min(64,Number(drawDiagnosticsParam)):3),diagnosticAfterPresent:diagnosticAfterPresentParam&&/^\d+$/.test(diagnosticAfterPresentParam)?Number(diagnosticAfterPresentParam):0,diagnosticSkip:diagnosticSkipParam&&/^\d+$/.test(diagnosticSkipParam)?Math.min(4096,Number(diagnosticSkipParam)):0,drawStateTrace:drawStateTraceParam&&/^\d+$/.test(drawStateTraceParam)?Math.min(256,Number(drawStateTraceParam)):0,captureFrames:params.has('captureFrames'),cameraTest:params.has('cameraTest')},[offscreen,channel.port1]);
-  worker.postMessage({type:'start',guestMemory:new URL(location.href).searchParams.get('guestMemory')==='1',resolution:new URL(location.href).searchParams.get('resolution'),build,assetCache:new URL(location.href).searchParams.get('assetCache')??'warm',benchmark:new URL(location.href).searchParams.has('benchmark'),trace:new URL(location.href).searchParams.get('trace'),executableBuffer:unlocked.executable,wasmBuffer:unlocked.wasm,gpuPort:channel.port2},[channel.port2,unlocked.executable,unlocked.wasm]);
+  worker.postMessage({type:'start',guestMemory:new URL(location.href).searchParams.get('guestMemory')==='1',resolution:new URL(location.href).searchParams.get('resolution'),build,assetCache:new URL(location.href).searchParams.get('assetCache')??'warm',benchmark:new URL(location.href).searchParams.has('benchmark'),trace:new URL(location.href).searchParams.get('trace'),executableBuffer:unlocked.executable,wasmBuffer:unlocked.wasm,gpuPort:channel.port2,inputPort:inputChannel.port2},[channel.port2,inputChannel.port2,unlocked.executable,unlocked.wasm]);
   // Ordinary play/test sessions keep running. This only catches startup
   // failures; the first Present clears it. Long sessions keep a 4-hour cap.
   timer=setTimeout(()=>stop(long?'session deadline reached':'startup watchdog: no Present within 60 seconds'),long?14400000:60000);
