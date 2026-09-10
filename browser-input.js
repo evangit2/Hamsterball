@@ -64,7 +64,7 @@ export function bindBrowserInput(canvas,{isRunning,send,unlock=()=>{},onCaptureC
   if(event.type==='pointerdown'){
    unlock();canvas.focus({preventScroll:true});
    try{canvas.setPointerCapture(event.pointerId);}catch(_){}
-   if(document.pointerLockElement!==canvas)void canvas.requestPointerLock?.().catch?.(()=>{});
+   if(!guestCursorVisible&&document.pointerLockElement!==canvas)void canvas.requestPointerLock?.().catch?.(()=>{});
   }
   if(document.pointerLockElement===canvas&&event.type==='pointermove'){
    const rect=canvas.getBoundingClientRect();

@@ -1,5 +1,5 @@
 {
-  "revision": "2574b19b7a6aa1e0ef340c23bda8ae9ccf2b61d2",
+  "revision": "d84166c0e3c2142ed7711424487fe7dbfe76534b",
   "dirty": false,
   "guest": {
     "id": "hamsterball",
@@ -2458,10 +2458,10 @@
     "wasmProfile": "release",
     "translatedTreeSha256": "a61cf7b018a7cbddd62c1b3043fc69bd88f8f7c462b08dff87f235f8564ecf73",
     "cargoLockSha256": "968c5d084c3a8ffaae74c4436735dad977229fbde0141ec4279b7d8a134164fd",
-    "builtAt": "2026-09-10T13:41:25.401862+00:00",
-    "revision": "2574b19b7a6aa1e0ef340c23bda8ae9ccf2b61d2",
+    "builtAt": "2026-09-10T14:09:41.114197+00:00",
+    "revision": "d84166c0e3c2142ed7711424487fe7dbfe76534b",
     "workingTreeDirty": false,
-    "sourceSha256": "d7171ef214559aac83d3803483d81523f88c99aff7ae31453b46bcbc6c433970",
+    "sourceSha256": "76c12c8a871f290c05164d7c744138a3cc36131b5c7a31be0eb1e1ae9da75e52",
     "executableSha256": "3379e9041c7ab83abd07da1bcf974529280aeff36b3c52e7a3d3bbb93e2da94d",
     "theseusRevision": "f8c1a2351b8b605812076d2dc34e84d20d95de4b",
     "translationEntryPoints": [],
@@ -2474,8 +2474,8 @@
         "bytes": 12970
       },
       "hamsterball_bg.wasm": {
-        "sha256": "f4b1098b8c5befd80fda0d1327a9cb059dafcffc710e62f6b2b7309035b01181",
-        "bytes": 25197476
+        "sha256": "710578055ebf01de36c175b8e1b9cfa2c84a4b1a63cdf880895ff8ed90a0b2e0",
+        "bytes": 25199365
       }
     }
   },
@@ -2483,13 +2483,13 @@
     "url": "generated/hamsterball/hamsterball.payload",
     "algorithm": "AES-256-GCM",
     "ivBytes": 12,
-    "bytes": 4184515,
-    "sha256": "8b3bf15c222c7d29ca44b11bb38331ac57aeab2a9925b6572a3698724283d8e4",
-    "plaintextSha256": "f4b1098b8c5befd80fda0d1327a9cb059dafcffc710e62f6b2b7309035b01181",
+    "bytes": 4184862,
+    "sha256": "2a754947a8499811b44f7b6e65df18bb7d5ccbc5994278cd8fabeac63cefc5a6",
+    "plaintextSha256": "710578055ebf01de36c175b8e1b9cfa2c84a4b1a63cdf880895ff8ed90a0b2e0",
     "keyDerivation": "SHA-256 of the exact executable bytes followed by DirectWebGPU Hamsterball guest payload v1",
     "compression": "gzip",
-    "decryptedBytes": 4184487,
-    "wasmBytes": 25197476
+    "decryptedBytes": 4184834,
+    "wasmBytes": 25199365
   },
   "assetBundle": {
     "url": "assets.bundle.gz",

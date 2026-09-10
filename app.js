@@ -1,7 +1,7 @@
 import {resourceMetrics,memoryProbe} from './resource-metrics.js';
 import {runtimeMode,runtimeModeInfo} from './runtime-mode.js';
 import {BrowserTrackerMusic} from './tracker-music.js';
-import {bindBrowserInput} from './browser-input.js?v=preview-input-1';
+import {bindBrowserInput} from './browser-input.js?v=preview-input-2';
 import {loadUnlockPayload} from './unlock-store.js?v=scoped-runtime-1';
 const $=id=>document.getElementById(id);
 let build,worker,gpuWorker,timer,probeWorker,inputBinding;
@@ -63,7 +63,10 @@ function benchmarkDuration(){const value=new URL(location.href).searchParams.get
 let report={runId:null,status:'idle',runtime:selectedModeInfo,environment:runtimeEnvironment(),events:[],droppedEvents:0,applicationPresents:0,submittedFrames:0,sceneFrames:0,performance:{firstSceneMs:'not measured',fps:'not measured',jsHeapBytes:'not measured',gpuBytes:'not measured'}};
 globalThis.directWebGPUReport=()=>structuredClone(report);
 function log(type,data={}){report.events.push({timeMs:Math.round(performance.now()),type,...data});if(report.events.length>250){report.events.shift();report.droppedEvents++}$('logs').textContent=report.events.map(e=>`${e.timeMs} ${e.type}: ${e.message??JSON.stringify(e.result??e)}`).join('\n');$('logs').scrollTop=$('logs').scrollHeight;}
-function stop(status='stopped'){clearTimeout(timer);timer=null;inputBinding?.release();inputBinding?.destroy();inputBinding=null;worker?.terminate();worker=null;gpuWorker?.terminate();gpuWorker=null;browserMusic.reset();browserAudio.reset();report.status=status;report.endedAt=new Date().toISOString();report.diagnosticAttemptMs=report.startTimeMs?performance.now()-report.startTimeMs:0;$('status').textContent=status;$('start').disabled=false;$('long').disabled=false;$('stop').disabled=true;if($('restart'))$('restart').disabled=false;document.body.classList.remove('running')}
+function diagnosticsText(){return JSON.stringify({summary:report.status,location:location.href,report},null,2)}
+function downloadDiagnostics(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([diagnosticsText()],{type:'application/json'}));a.download=`${build?.guest?.id??'directwebgpu'}-${report.runId??'probe'}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+function crashActions(status){const button=$('crash-details');if(!button)return;const crashed=!!report.blocker||/^(failed:|gpu-error:|gpu-lost:|startup watchdog:)/.test(status);button.hidden=!crashed;if(crashed)$('crash-output').textContent=diagnosticsText();}
+function stop(status='stopped'){clearTimeout(timer);timer=null;inputBinding?.release();inputBinding?.destroy();inputBinding=null;worker?.terminate();worker=null;gpuWorker?.terminate();gpuWorker=null;browserMusic.reset();browserAudio.reset();report.status=status;report.endedAt=new Date().toISOString();report.diagnosticAttemptMs=report.startTimeMs?performance.now()-report.startTimeMs:0;$('status').textContent=status;$('start').disabled=false;$('long').disabled=false;$('stop').disabled=true;if($('restart'))$('restart').disabled=false;document.body.classList.remove('running');crashActions(status)}
 async function start(long=false){
  if(worker||!build||$('start').disabled)return;
  browserAudio.unlock();
@@ -74,6 +77,7 @@ async function start(long=false){
   const unlocked=await loadUnlockPayload(build.dependencies.executable.sha256,build.encryptedGuest.plaintextSha256);
   probeWorker?.terminate();probeWorker=null;
   report={applicationPresents:0,submittedFrames:0,sceneFrames:0,performance:{firstSceneMs:'not measured',fps:'not measured',jsHeapBytes:'not measured',gpuBytes:'not measured'},runtime:selectedModeInfo,environment:runtimeEnvironment(),runId:crypto.randomUUID(),status:'starting',events:[],droppedEvents:0,build:reportBuild(build),startTimeMs:performance.now(),startedAt:new Date().toISOString(),requestedDurationMs:long?14400000:new URL(location.href).searchParams.has('benchmark')?measurementMs:null,visibility:document.visibilityState};
+  $('crash-details').hidden=true;$('crash-dialog')?.close();
   $('start').disabled=true;$('long').disabled=true;$('stop').disabled=false;if($('restart'))$('restart').disabled=false;$('status').textContent=gameHarness?'Starting…':`Executing original ${build.guest.title} binary…`;document.body.classList.add('running');
   // Keep runtime query parameters in the worker URL so a changed runtime mode
   // cannot reuse a browser-cached worker module from another run.
@@ -132,7 +136,11 @@ $('fullscreen')?.addEventListener('click',()=>void(document.fullscreenElement?do
 document.addEventListener('fullscreenchange',()=>{if($('fullscreen'))$('fullscreen').textContent=document.fullscreenElement?'Exit fullscreen':'Fullscreen'});
 $('debug-toggle')?.addEventListener('click',()=>{$('debug-panel').open=!$('debug-panel').open});
 $('volume')?.addEventListener('input',event=>{browserAudio.setVolume(Number(event.target.value)/100);$('volume-value').textContent=`${event.target.value}%`;browserAudio.unlock()});
-$('download').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)],{type:'application/json'}));a.download=`${build?.guest?.id??'directwebgpu'}-${report.runId??'probe'}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};
+$('download').onclick=downloadDiagnostics;
+$('crash-details')?.addEventListener('click',()=>{$('crash-output').textContent=diagnosticsText();$('crash-dialog').showModal()});
+$('crash-close')?.addEventListener('click',()=>$('crash-dialog').close());
+$('crash-download')?.addEventListener('click',downloadDiagnostics);
+$('crash-copy')?.addEventListener('click',async()=>{const button=$('crash-copy');try{await navigator.clipboard.writeText(diagnosticsText());button.textContent='Copied';setTimeout(()=>button.textContent='Copy details',1600)}catch(error){$('crash-output').focus();log('copy-error',{message:error.message})}});
 document.addEventListener('visibilitychange',()=>log('visibility',{message:document.visibilityState}));
 try{
  const response=await fetch('./build-manifest.json',{cache:'no-store'});
