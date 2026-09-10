@@ -5,35 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#05070a">
   <title>Hamsterball · DirectWebGPU</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="unlock.css">
 </head>
 <body>
-  <main id="player">
-    <header>
+  <main>
+    <div id="drop-zone" class="panel" tabindex="0" role="button">
       <strong>Hamsterball</strong>
-      <span id="toolbar-status">Stopped</span>
-      <nav>
-        <button id="restart-button" type="button">Restart</button>
-        <button id="fullscreen-button" type="button">Fullscreen</button>
-        <button id="stop-button" type="button">Force stop</button>
-      </nav>
-    </header>
-    <section id="stage">
-      <iframe id="game-frame" title="Hamsterball" allow="autoplay; fullscreen; gamepad" allowfullscreen></iframe>
-      <div id="setup">
-        <div id="drop-zone" class="panel" tabindex="0" role="button">
-          <strong>Choose Hamsterball.exe</strong>
-          <span id="status">Checking DirectWebGPU…</span>
-          <span id="detail"></span>
-          <span id="status-dot" hidden></span>
-          <button id="exe-button" type="button">Choose EXE</button>
-          <progress id="progress" max="100" value="0" hidden></progress>
-          <button id="launch-button" class="start" type="button" disabled>Start</button>
-        </div>
-      </div>
-    </section>
+      <span id="status">Choose your Hamsterball.exe to play.</span>
+      <button id="exe-button" class="start" type="button">Choose Hamsterball.exe</button>
+      <progress id="progress" hidden></progress>
+    </div>
     <input id="exe-input" type="file" accept=".exe,application/vnd.microsoft.portable-executable,application/x-msdownload" hidden>
   </main>
-  <script type="module" src="app.js"></script>
+  <script src="./coi-serviceworker.js"></script>
+  <script type="module" src="unlock.js"></script>
 </body>
 </html>

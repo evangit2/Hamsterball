@@ -1,102 +1,138 @@
-const COMPANION = 'http://127.0.0.1:8799';
-const $ = id => document.getElementById(id);
-const state = {companion: false, executable: null};
-
-function setStatus(message, detail = '') {
-  $('status').textContent = message;
-  $('detail').textContent = detail;
+import {resourceMetrics,memoryProbe} from './resource-metrics.js';
+import {runtimeMode,runtimeModeInfo} from './runtime-mode.js';
+import {BrowserTrackerMusic} from './tracker-music.js';
+import {bindBrowserInput} from './browser-input.js';
+import {loadUnlockPayload} from './unlock-store.js';
+const $=id=>document.getElementById(id);
+let build,worker,gpuWorker,timer,probeWorker,inputBinding;
+const selectedMode=runtimeMode(),selectedModeInfo=runtimeModeInfo(selectedMode);
+const gameHarness=document.body.dataset.harness==='game';
+class BrowserAudio {
+ constructor(){this.context=null;this.master=null;this.volume=1;this.sources=new Set();this.streams=new Map();this.pending=[];this.bytes=0;this.buffers=0;this.writesReceived=0;this.droppedPending=0;this.underruns=0;this.clippedSamples=0;this.peak=0;this.maxQueueAheadMs=0;}
+ ensure(){
+  if(this.context)return this.context;
+  const C=globalThis.AudioContext??globalThis.webkitAudioContext;if(!C)return null;
+  try{this.context=new C();this.master=this.context.createGain();this.master.gain.value=this.volume;this.master.connect(this.context.destination);}catch(_){return null}return this.context;
+ }
+ output(){this.ensure();return this.master??this.context?.destination;}
+ setVolume(value){this.volume=Math.max(0,Math.min(1,Number(value)));if(this.master)this.master.gain.value=this.volume;}
+ reset(){for(const source of this.sources){try{source.stop();}catch(_){}}this.sources.clear();this.streams.clear();this.pending.length=0;}
+ open(id,sampleRate,channels){this.ensure();this.streams.set(id,{sampleRate,channels,nextTime:0});}
+ unlock(){const c=this.ensure();if(!c)return;void c.resume().then(()=>{const pending=this.pending.splice(0);for(const item of pending)this.write(item.id,item.data);browserMusic.unlock();audioDiagnostic('audio-unlocked');}).catch(()=>audioDiagnostic('audio-unlock-failed'));}
+ write(id,data){
+  const c=this.ensure(),s=this.streams.get(id);if(!c||!s)return;
+  if(!(data instanceof ArrayBuffer)||data.byteLength<2||data.byteLength%2)return;
+  this.writesReceived++;
+  if(c.state!=='running'){this.pending.push({id,data});while(this.pending.length>1){this.pending.shift();this.droppedPending++;}return;}
+  const sourceBytes=new Int16Array(data),frames=Math.floor(sourceBytes.length/s.channels);if(!frames)return;
+  const buffer=c.createBuffer(s.channels,frames,s.sampleRate);
+  for(let channel=0;channel<s.channels;channel++){const out=buffer.getChannelData(channel);for(let frame=0;frame<frames;frame++){const sample=sourceBytes[frame*s.channels+channel];out[frame]=sample/32768;this.peak=Math.max(this.peak,Math.abs(sample));if(sample===-32768||sample===32767)this.clippedSamples++;}}
+  const source=c.createBufferSource();source.buffer=buffer;source.connect(this.output());this.sources.add(source);source.onended=()=>this.sources.delete(source);const now=c.currentTime;
+  if(s.nextTime&&s.nextTime<now)this.underruns++;
+  // Audio messages share the busy page thread with diagnostics and input.
+  // Maintain enough lead for ordinary scheduling jitter while keeping effects responsive.
+  s.nextTime=Math.max(s.nextTime,now+0.06);source.start(s.nextTime);s.nextTime+=buffer.duration;
+  this.maxQueueAheadMs=Math.max(this.maxQueueAheadMs,(s.nextTime-now)*1000);this.bytes+=data.byteLength;this.buffers++;
+ }
 }
-
-function updateStart() {
-  $('launch-button').disabled = !(state.companion && state.executable);
+const browserAudio=new BrowserAudio();
+const browserMusic=new BrowserTrackerMusic(()=>browserAudio.ensure(),musicDiagnostic,()=>browserAudio.output());
+function audioDiagnostic(type,data={}){
+ report.audio={contextState:browserAudio.context?.state??'unavailable',streams:browserAudio.streams.size,writesReceived:browserAudio.writesReceived,bytesScheduled:browserAudio.bytes,buffersScheduled:browserAudio.buffers,pendingChunks:browserAudio.pending.length,droppedPending:browserAudio.droppedPending,underruns:browserAudio.underruns,clippedSamples:browserAudio.clippedSamples,peak:browserAudio.peak,maxQueueAheadMs:Math.round(browserAudio.maxQueueAheadMs),...data};
+ const debug=new URL(location.href).searchParams.has('debugDiagnostics');
+ if(debug&&(type!=='audio-write'||browserAudio.writesReceived===1||browserAudio.writesReceived%64===0))log(type,{message:JSON.stringify(report.audio)});
 }
-
-async function chooseExecutable(file) {
-  if (!file || file.name.toLowerCase() !== 'hamsterball.exe') {
-    throw new Error('Choose Hamsterball.exe');
-  }
-  const signature = new Uint8Array(await file.slice(0, 2).arrayBuffer());
-  if (signature[0] !== 0x4d || signature[1] !== 0x5a) throw new Error('That file is not a Windows executable');
-  state.executable = file;
-  setStatus('Ready', `${file.name} · ${(file.size / 1048576).toFixed(1)} MB`);
-  updateStart();
+function musicDiagnostic(type,data={}){
+ const previous=report.music??{},buffers=type==='music-buffer'?(previous.buffers??0)+1:(previous.buffers??0);
+ report.music={...previous,state:type,buffers,...data};
+ if((type!=='music-buffer'||buffers===1)&&new URL(location.href).searchParams.has('debugDiagnostics'))log(type,{message:JSON.stringify(data)});
 }
-
-async function checkCompanion() {
-  try {
-    const response = await fetch(`${COMPANION}/health`, {signal: AbortSignal.timeout(1500)});
-    if (!response.ok) throw new Error();
-    state.companion = true;
-    if (!state.executable) setStatus('DirectWebGPU ready', 'Choose Hamsterball.exe');
-  } catch {
-    state.companion = false;
-    setStatus('Start the local companion', 'Run: python3 companion.py');
-  }
-  updateStart();
+function benchmarkDuration(){const value=new URL(location.href).searchParams.get('benchmarkSeconds')??'60';if(!/^\d+$/.test(value)||Number(value)<60||Number(value)>600)throw Error('benchmarkSeconds must be an integer from 60 through 600');return Number(value)*1000;}
+let report={runId:null,status:'idle',runtime:selectedModeInfo,events:[],droppedEvents:0,applicationPresents:0,submittedFrames:0,sceneFrames:0,performance:{firstSceneMs:'not measured',fps:'not measured',jsHeapBytes:'not measured',gpuBytes:'not measured'}};
+globalThis.directWebGPUReport=()=>structuredClone(report);
+function log(type,data={}){report.events.push({timeMs:Math.round(performance.now()),type,...data});if(report.events.length>250){report.events.shift();report.droppedEvents++}$('logs').textContent=report.events.map(e=>`${e.timeMs} ${e.type}: ${e.message??JSON.stringify(e.result??e)}`).join('\n');$('logs').scrollTop=$('logs').scrollHeight;}
+function stop(status='stopped'){clearTimeout(timer);timer=null;inputBinding?.release();inputBinding?.destroy();inputBinding=null;worker?.terminate();worker=null;gpuWorker?.terminate();gpuWorker=null;browserMusic.reset();browserAudio.reset();report.status=status;report.endedAt=new Date().toISOString();report.diagnosticAttemptMs=report.startTimeMs?performance.now()-report.startTimeMs:0;$('status').textContent=status;$('start').disabled=false;$('long').disabled=false;$('stop').disabled=true;if($('restart'))$('restart').disabled=false;document.body.classList.remove('running')}
+async function start(long=false){
+ if(worker||!build||$('start').disabled)return;
+ browserAudio.unlock();
+ $('start').disabled=true;$('long').disabled=true;
+ if(!crossOriginIsolated){$('status').textContent='Cross-origin isolation not active yet — reload the page once (the service worker enables it on the second load).';$('start').disabled=false;$('long').disabled=false;return;}
+ try{
+  const params=new URL(location.href).searchParams,measurementMs=params.has('benchmark')?benchmarkDuration():null;
+  const unlocked=await loadUnlockPayload(build.dependencies.executable.sha256,build.encryptedGuest.plaintextSha256);
+  probeWorker?.terminate();probeWorker=null;
+  report={applicationPresents:0,submittedFrames:0,sceneFrames:0,performance:{firstSceneMs:'not measured',fps:'not measured',jsHeapBytes:'not measured',gpuBytes:'not measured'},runtime:selectedModeInfo,runId:crypto.randomUUID(),status:'starting',events:[],droppedEvents:0,build,startTimeMs:performance.now(),startedAt:new Date().toISOString(),requestedDurationMs:long?14400000:new URL(location.href).searchParams.has('benchmark')?measurementMs:null,visibility:document.visibilityState};
+  $('start').disabled=true;$('long').disabled=true;$('stop').disabled=false;if($('restart'))$('restart').disabled=false;$('status').textContent=gameHarness?'Starting…':`Executing original ${build.guest.title} binary…`;document.body.classList.add('running');
+  // Keep runtime query parameters in the worker URL so a changed runtime mode
+  // cannot reuse a browser-cached worker module from another run.
+  const workerVersion=encodeURIComponent(`${build.runtimeBuild?.sourceSha256??build.runtimeBuild?.builtAt??build.revision}:${location.search}`);
+  worker=new Worker(new URL(`./worker.js?guest=${encodeURIComponent(build.guest.id)}&v=${workerVersion}`,import.meta.url),{type:'module'});
+  const activeRunId=report.runId;
+  worker.onmessage=({data})=>{
+   if(data.type==='audio-open'){browserAudio.open(data.streamId,data.sampleRate,data.channels);audioDiagnostic('audio-open',{sampleRate:data.sampleRate,channels:data.channels});return;}
+   if(data.type==='audio-write'){browserAudio.write(data.streamId,data.data);audioDiagnostic('audio-write');return;}
+   if(data.type==='audio-resume'){browserAudio.unlock();audioDiagnostic('audio-resume');return;}
+   if(data.type==='music-load'){const bytes=data.data.byteLength;browserMusic.load(data.handle,data.data,data.flags);musicDiagnostic('music-received',{handle:data.handle,bytes,flags:data.flags});return;}
+   if(data.type==='music-play'){browserMusic.play(data.handle,data.start,data.flags,data.restart);return;}
+   if(data.type==='music-stop'){data.handle?browserMusic.stop(data.handle):browserMusic.stopAll();return;}
+   if(data.type==='music-attributes'){browserMusic.attributes(data.handle,data.frequency,data.volume,data.pan);return;}
+   if(data.type==='music-free-all'){browserMusic.reset();return;}
+   if(!worker||report.runId!==activeRunId)return;
+   const {type,...rest}=data;if(type==='performance-sample'){report.presentationMetrics=rest.sample;const elapsedMs=performance.now()-report.startTimeMs;report.stabilitySamples??=[];if(!report.stabilitySamples.length||elapsedMs-report.stabilitySamples.at(-1).elapsedMs>=30000){if(report.stabilitySamples.length<21){const m=rest.sample;report.stabilitySamples.push({elapsedMs,applicationPresents:report.applicationPresents,wasmLinearMemoryBytes:m.wasmLinearMemoryBytes,geometryGPUBytes:m.geometryGPUBytes,textureGPUBytes:m.textureGPUBytes,pipelineCacheEntries:m.pipelineCacheEntries,shaderObjects:m.shaderObjects,submissionFPS:m.submissionFPS});}}if(new URL(location.href).searchParams.has('debugDiagnostics'))log(type,{message:`present=${report.applicationPresents} submissionFPS=${rest.sample.submissionFPS??'n/a'} p95=${rest.sample.frameTimeMs?.p95??'n/a'}ms gpuQueue=${rest.sample.queueCompletionSamples?.at(-1)?.latencyMs?.toFixed?.(1)??'n/a'}ms drawBatches=${rest.sample.drawBridge?.drawBatches??'n/a'} batchedDraws=${rest.sample.drawBridge?.batchedDraws??'n/a'} batchedUploads=${rest.sample.drawBridge?.batchedUploads??'n/a'} sourceWrites=${rest.sample.rendererWrites?(rest.sample.rendererWrites.sourceGeometryWrites+rest.sample.rendererWrites.sourceUniformWrites):'n/a'} queueWrites=${rest.sample.rendererWrites?.queueWriteCalls??'n/a'}`});return;}if(type==='draw-state'){report.drawStateTrace??=[];if(report.drawStateTrace.length<256)report.drawStateTrace.push(rest.sample);if(new URL(location.href).searchParams.has('debugDiagnostics'))log(type,{message:`present=${rest.sample.present} count=${rest.sample.count} textures=${rest.sample.textures?.join(',')??'n/a'} stage0=${rest.sample.textureStages?.[0]?.join(',')??'n/a'} lighting=${rest.sample.lightingHeader?.join(',')??'n/a'} state=${JSON.stringify(rest.sample.state)} texture0=${rest.sample.textureInfo?.[0]?JSON.stringify(rest.sample.textureInfo[0]):'n/a'} declaration=${rest.sample.declaration?.join(',')??'n/a'}`});return;}if(['controlled-input','camera-sample','render-state-sample'].includes(type)){report.inputTest??=[];if(report.inputTest.length<140)report.inputTest.push({type,...rest});return;}if(type==='guest-memory'){report.guestMemory??=[];if(report.guestMemory.length<11)report.guestMemory.push(rest.sample);return;}if(type==='realm-resources'){report.realmResources??={};report.realmResources[rest.sample.realm]=rest.sample;return;}if(type==='gpu-timing'){report.gpuTiming??=[];if(report.gpuTiming.length>=128)report.gpuTiming.shift();report.gpuTiming.push(rest.sample);return;}if(type==='scene-equivalence'){report.sceneEquivalence??=[];if(report.sceneEquivalence.length<3)report.sceneEquivalence.push(rest.sample);return;}if(type==='frame-capture'){report.frameCaptures??=[];if(report.frameCaptures.length<3)report.frameCaptures.push(rest.sample);if(new URL(location.href).searchParams.has('debugDiagnostics'))log(type,{message:`present=${rest.sample.present} nonblack=${rest.sample.sceneRegion?.nonblackPixels??'n/a'}/${rest.sample.sceneRegion?.pixels??'n/a'} mean=${rest.sample.sceneRegion?.meanRgb?.join(',')??'n/a'}`});return;}if(type==='draw-diagnostic'){report.drawDiagnostics??=[];if(report.drawDiagnostics.length<16)report.drawDiagnostics.push(rest.sample);if(new URL(location.href).searchParams.has('debugDiagnostics'))log(type,{message:`fixed=${rest.sample.fixed?1:0} vertex=${rest.sample.vertex} pixel=${rest.sample.pixel} kind=${rest.sample.kind} count=${rest.sample.count} textures=${rest.sample.textures?.join(',')??'n/a'} sampler0=${rest.sample.samplers?.[0]?.join(',')??'n/a'} texture0=${rest.sample.textureInfo?.[0]?JSON.stringify(rest.sample.textureInfo[0]):'n/a'} stage0=${rest.sample.textureStages?.[0]?.join(',')??'n/a'} state=${JSON.stringify(Object.fromEntries(Object.entries(rest.sample.state??{}).filter(([k])=>['7','14','15','19','20','22','23','24','25','27','168','171'].includes(k))))} viewport=${rest.sample.viewport?.join(',')??'n/a'} inputs=${rest.sample.pair?.vertex?.inputs?.map(i=>`${i.usage}:${i.index}@${i.location}`).join(',')??'n/a'} samplers=${rest.sample.pair?.pixel?.samplers?.length??'n/a'} declarationBytes=${rest.sample.declaration?.length??0} geometry=${(rest.sample.geometry??[]).map(g=>`${g.slot}:${g.stride}/${g.bytes.length} first=${g.bytes.slice(0,40).join('.')} verts=${JSON.stringify(g.float32?.slice(0,2)??[])}`).join(',')}`});return;}if(type!=='gpu-submission'&&type!=='application-present')log(type,rest);
+   if(type==='probe')report.browser=rest.result;
+   if(type==='d3d9-device-created')report.d3d9Device=rest;
+   if(type==='application-present'){report.applicationPresents=rest.count;report.submittedFrames=rest.submittedFrames;if(rest.count===1){report.firstPresentObservedMs=performance.now()-report.startTimeMs;report.realmResources??={};report.realmResources.page=resourceMetrics(performance,'page','first Present observed; includes page setup before Start');if(params.has('memoryProbe')){report.memoryProbe={status:'pending'};void memoryProbe(performance).then(sample=>{if(report.runId===activeRunId&&worker)report.memoryProbe={...sample,presentsAtCompletion:report.applicationPresents};});}$('status').textContent='Running';if(!long){clearTimeout(timer);timer=null;}if(!long&&params.has('startupTrial'))timer=setTimeout(()=>stop('startup trial completed after first Present'),100);else if(!long&&params.has('benchmark'))timer=setTimeout(()=>stop(`${measurementMs/1000}-second frame-delivery measurement completed`),measurementMs);}if(rest.count===1||rest.count%60===0){const p95=report.presentationMetrics?.frameTimeMs?.p95;$('metrics').textContent=`Application Presents: ${rest.count} · Submitted frames: ${rest.submittedFrames} · p95 ${Number.isFinite(p95)?p95.toFixed(1):'not measured'} ms`;}}
+   if(type==='gpu-submission')report.gpuSubmissions=rest.count;
+   if(type==='identity')report.executableSha256=rest.sha256;
+   if(type==='window-created'||type==='window-resized'){report.window=rest;const aspect=rest.width/rest.height;$('scene').style.aspectRatio=`${rest.width}/${rest.height}`;$('stage').style.setProperty('--game-aspect',String(aspect))}
+   if(type==='d3d9-created'){report.direct3DCreate9Reached=true;report.direct3D9ObjectCreated=true;}
+   if(type==='failed'&&rest.message.includes('d3d9!Direct3DCreate9'))report.direct3DCreate9Reached=true;
+   if(type==='execution-start')report.originalExecutionAttempted=true;
+   if(type==='resource-metrics')report.resourceMetrics=rest;
+   if(type==='asset-cache-metrics')report.assetCacheMetrics=rest;
+   if(rest.wasmLinearMemoryBytes)report.performance.wasmLinearMemoryBytes=rest.wasmLinearMemoryBytes;
+   if(type==='failed'){report.blocker=rest.message;const detail=rest.message.replace(/\s+/g,' ').slice(0,1200);stop('failed: '+detail);}
+   if(type==='returned')stop('executable returned without verified scene');
+   if(type==='gpu-error'||type==='gpu-lost'){report.blocker=rest;stop(type+': '+rest.message)}
+  };
+  worker.onerror=e=>{report.blocker=e.message;log('worker-error',{message:e.message});stop('failed: '+e.message)};
+  const oldCanvas=$('scene');const canvas=oldCanvas.cloneNode();oldCanvas.replaceWith(canvas);
+  canvas.tabIndex=0;inputBinding=bindBrowserInput(canvas,{isRunning:()=>!!worker,send:message=>gpuWorker?.postMessage({type:'input',message}),unlock:()=>browserAudio.unlock(),debug:message=>{if(params.has('debugInput'))log('input',{message:message.join(',')})},onCaptureChange:(locked,supported)=>{if($('capture'))$('capture').textContent=locked?'Mouse captured':supported?'Capture mouse':'Focus game';document.body.classList.toggle('mouse-captured',locked);}});
+  const offscreen=canvas.transferControlToOffscreen();
+  const channel=new MessageChannel();gpuWorker=new Worker(new URL(`./gpu-worker.js?guest=${encodeURIComponent(build.guest.id)}&v=${workerVersion}`,import.meta.url),{type:'module'});
+  gpuWorker.onmessage=worker.onmessage;gpuWorker.onerror=worker.onerror;
+  const drawDiagnosticsParam=params.get('drawDiagnostics'),drawStateTraceParam=params.get('drawStateTrace');
+  const diagnosticAfterPresentParam=params.get('drawDiagnosticsAfterPresent'),diagnosticSkipParam=params.get('drawDiagnosticsSkip');
+  gpuWorker.postMessage({type:'init',runtimeMode:selectedMode,gpuTiming:params.has('gpuTiming'),sceneEquivalenceControl:params.get('sceneEquivalenceControl'),sceneEquivalence:params.has('sceneEquivalence'),canvas:offscreen,port:channel.port1,startEpoch:performance.timeOrigin+report.startTimeMs,drawDiagnostics:drawDiagnosticsParam===null?0:(/^\d+$/.test(drawDiagnosticsParam)?Math.min(64,Number(drawDiagnosticsParam)):3),diagnosticAfterPresent:diagnosticAfterPresentParam&&/^\d+$/.test(diagnosticAfterPresentParam)?Number(diagnosticAfterPresentParam):0,diagnosticSkip:diagnosticSkipParam&&/^\d+$/.test(diagnosticSkipParam)?Math.min(4096,Number(diagnosticSkipParam)):0,drawStateTrace:drawStateTraceParam&&/^\d+$/.test(drawStateTraceParam)?Math.min(256,Number(drawStateTraceParam)):0,captureFrames:params.has('captureFrames'),cameraTest:params.has('cameraTest')},[offscreen,channel.port1]);
+  worker.postMessage({type:'start',guestMemory:new URL(location.href).searchParams.get('guestMemory')==='1',resolution:new URL(location.href).searchParams.get('resolution'),build,assetCache:new URL(location.href).searchParams.get('assetCache')??'warm',benchmark:new URL(location.href).searchParams.has('benchmark'),trace:new URL(location.href).searchParams.get('trace'),executableBuffer:unlocked.executable,wasmBuffer:unlocked.wasm,gpuPort:channel.port2},[channel.port2,unlocked.executable,unlocked.wasm]);
+  // Ordinary play/test sessions keep running. This only catches startup
+  // failures; the first Present clears it. Long sessions keep a 4-hour cap.
+  timer=setTimeout(()=>stop(long?'session deadline reached':'startup watchdog: no Present within 60 seconds'),long?14400000:60000);
+ }catch(e){log('failed',{message:e.message});stop('failed: '+e.message)}
 }
-
-async function start() {
-  $('launch-button').disabled = true;
-  $('progress').hidden = false;
-  $('progress').removeAttribute('value');
-  setStatus('Building…', 'The first DirectWebGPU translation can take a few minutes.');
-  try {
-    const response = await fetch(`${COMPANION}/build`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/octet-stream', 'X-Executable-Name': state.executable.name},
-      body: state.executable,
-    });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || `Build failed (${response.status})`);
-    $('progress').hidden = true;
-    $('setup').hidden = true;
-    $('toolbar-status').textContent = 'Running';
-    $('game-frame').src = result.url;
-  } catch (error) {
-    $('progress').hidden = true;
-    setStatus('Could not start', error.message);
-    updateStart();
-  }
-}
-
-function showError(error) {
-  state.executable = null;
-  setStatus(error.message);
-  updateStart();
-}
-
-$('exe-button').addEventListener('click', () => $('exe-input').click());
-$('exe-input').addEventListener('change', event => chooseExecutable(event.target.files[0]).catch(showError));
-$('launch-button').addEventListener('click', start);
-
-const drop = $('drop-zone');
-for (const name of ['dragenter', 'dragover']) drop.addEventListener(name, event => {
-  event.preventDefault();
-  drop.classList.add('dragging');
-});
-for (const name of ['dragleave', 'drop']) drop.addEventListener(name, event => {
-  event.preventDefault();
-  drop.classList.remove('dragging');
-});
-drop.addEventListener('drop', event => chooseExecutable(event.dataTransfer.files[0]).catch(showError));
-drop.addEventListener('keydown', event => {
-  if (event.key === 'Enter' || event.key === ' ') $('exe-input').click();
-});
-
-$('restart-button').addEventListener('click', () => {
-  const frame = $('game-frame');
-  if (frame.src && frame.src !== 'about:blank') frame.src = frame.src;
-});
-$('stop-button').addEventListener('click', () => {
-  $('game-frame').src = 'about:blank';
-  $('setup').hidden = false;
-  $('toolbar-status').textContent = 'Stopped';
-  updateStart();
-});
-$('fullscreen-button').addEventListener('click', async () => {
-  if (document.fullscreenElement) await document.exitFullscreen();
-  else await $('stage').requestFullscreen();
-});
-
-checkCompanion();
-setInterval(checkCompanion, 5000);
+$('start').onclick=()=>start();$('long').onclick=()=>start(true);$('stop').onclick=()=>stop();
+$('restart')?.addEventListener('click',()=>{if(worker)stop('restarting');setTimeout(()=>start(),0)});
+$('capture')?.addEventListener('click',()=>inputBinding?.capture());
+$('fullscreen')?.addEventListener('click',()=>void(document.fullscreenElement?document.exitFullscreen():$('stage')?.requestFullscreen?.()));
+document.addEventListener('fullscreenchange',()=>{if($('fullscreen'))$('fullscreen').textContent=document.fullscreenElement?'Exit fullscreen':'Fullscreen'});
+$('debug-toggle')?.addEventListener('click',()=>{$('debug-panel').open=!$('debug-panel').open});
+$('volume')?.addEventListener('input',event=>{browserAudio.setVolume(Number(event.target.value)/100);$('volume-value').textContent=`${event.target.value}%`;browserAudio.unlock()});
+$('download').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)],{type:'application/json'}));a.download=`${build?.guest?.id??'directwebgpu'}-${report.runId??'probe'}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};
+document.addEventListener('visibilitychange',()=>log('visibility',{message:document.visibilityState}));
+try{
+ const response=await fetch('./build-manifest.json',{cache:'no-store'});
+ if(!response.ok)throw Error('build manifest '+response.status);
+ build=await response.json();if(!Array.isArray(build.files)||!build.dependencies?.executable||!build.guest?.title)throw Error('invalid build manifest');report.build=build;
+ $('runtime').textContent=`Runtime: Theseus x86 → WASM · Graphics: ${selectedModeInfo.shaderCompiler} → WebGPU · Mode: ${selectedMode}${selectedModeInfo.deprecated?' (deprecated)':''}`;
+ document.title=`${build.guest.title} · DirectWebGPU`;$('title').textContent=gameHarness?build.guest.title:`${build.guest.title} binary runtime`;$('start').textContent=`Start ${build.guest.title}`;$('revision').textContent=`Loading ${build.guest.title} runtime…`;
+ $('start').disabled=false;$('long').disabled=false;
+ const dirty=build.dirty??build.workingTreeDirty;
+ $('revision').textContent=`${build.guest.title} · revision ${build.runtimeBuild?.revision??build.revision}${dirty?' (working tree modified)':''} · EXE ${build.dependencies.executable.sha256}`;
+ if($('play-link'))$('play-link').href=`./${build.guest.id}${location.search}`;
+ const workerUrl=`./worker.js?guest=${encodeURIComponent(build.guest.id)}`;
+ probeWorker=new Worker(new URL(workerUrl,import.meta.url),{type:'module'});
+ probeWorker.onmessage=({data})=>{log(data.type,data);if(data.type==='probe'){report.browser=data.result;$('status').textContent=data.result.deviceCreated?'GPU device available. Ready for executable launch.':'GPU unavailable. CPU execution tests remain available.'}};
+ probeWorker.onerror=e=>{log('probe-error',{message:e.message});$('status').textContent='GPU probe failed: '+e.message};
+ probeWorker.postMessage({type:'probe'});
+ if(gameHarness||new URL(location.href).searchParams.has('autostart'))void start();
+}catch(e){log('initialization-error',{message:e.message});$('status').textContent=e.message}

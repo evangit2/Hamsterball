@@ -1,20 +1,17 @@
 # Hamsterball · DirectWebGPU
 
-A DirectWebGPU play harness for a user-supplied `Hamsterball.exe`. The supporting game asset pack is included; the executable stays on the user's computer and is translated by the local companion.
+A browser play harness for a user-supplied `Hamsterball.exe`, powered by [DirectWebGPU](https://github.com/evangit2/DirectWebGPU). The executable stays inside the browser tab and is never uploaded.
 
 ## Use it
 
 1. Open <https://evangit2.github.io/Hamsterball/>.
-2. Clone this repository and run `python3 companion.py`.
-3. Choose `Hamsterball.exe`.
-4. Select **Start Hamsterball**. The companion builds and launches the game through [DirectWebGPU](https://github.com/evangit2/DirectWebGPU).
+2. Choose `Hamsterball.exe`.
+3. The game opens in the DirectWebGPU play harness.
 
-Set `DIRECTWEBGPU_HOME=/path/to/DirectWebGPU` when the DirectWebGPU checkout is not next to this repository. `HAMSTERBALL_ASSET_ROOT` can override the included asset pack.
-
-The GitHub Pages host never receives the selected executable. This repository contains no `Hamsterball.exe` or translated Hamsterball WASM.
+The supporting game assets and browser runtime are included in this repository.
 
 ## Current architecture
 
-DirectWebGPU currently translates Win32 x86 code ahead of time. Browsers cannot run that compiler directly yet, so the small local companion performs translation and serves the generated runtime on localhost. Moving this translation step fully into the browser is tracked as future DirectWebGPU work.
+DirectWebGPU translates the original Win32 x86 executable ahead of time. This repository stores that translated payload encrypted with a key derived from the complete bytes of the exact supported executable. The browser hashes the file selected by the user, decrypts the payload in memory with Web Crypto, verifies it, and runs it through the DirectWebGPU Win32 and WineD3D-compatible WebGPU runtime. The unencrypted translated payload and original executable are not published.
 
 Hamsterball is copyright Raptisoft. This project is an independent compatibility launcher and is not affiliated with Raptisoft.
