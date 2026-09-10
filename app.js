@@ -1,7 +1,7 @@
 import {resourceMetrics,memoryProbe} from './resource-metrics.js';
 import {runtimeMode,runtimeModeInfo} from './runtime-mode.js';
 import {BrowserTrackerMusic} from './tracker-music.js';
-import {bindBrowserInput} from './browser-input.js?v=preview-input-2';
+import {bindBrowserInput} from './browser-input.js?v=preview-input-4';
 import {loadUnlockPayload} from './unlock-store.js?v=scoped-runtime-1';
 const $=id=>document.getElementById(id);
 let build,worker,gpuWorker,timer,probeWorker,inputBinding;
@@ -116,7 +116,7 @@ async function start(long=false){
   worker.onerror=e=>{const detail={realm:'CPU worker',message:e.message||e.error?.message||'Worker terminated without an error message',filename:e.filename||null,line:e.lineno||null,column:e.colno||null};report.blocker=detail;log('worker-error',detail);stop('failed: '+detail.message)};
   const oldCanvas=$('scene');const canvas=oldCanvas.cloneNode();oldCanvas.replaceWith(canvas);
   const virtualCursor=({x,y,visible})=>{const marker=$('guest-cursor');if(!marker)return;const activeCanvas=$('scene');if(!visible||!activeCanvas){marker.hidden=true;return;}const canvasRect=activeCanvas.getBoundingClientRect(),stageRect=$('stage').getBoundingClientRect();marker.hidden=false;marker.style.transform=`translate(${canvasRect.left-stageRect.left+x*canvasRect.width/activeCanvas.width}px,${canvasRect.top-stageRect.top+y*canvasRect.height/activeCanvas.height}px)`;};
-  canvas.tabIndex=0;inputBinding=bindBrowserInput(canvas,{isRunning:()=>!!worker,send:message=>gpuWorker?.postMessage({type:'input',message}),unlock:()=>browserAudio.unlock(),profile:build.guest?.inputProfile??{},touchRoot:$('touch-controls'),onVirtualCursor:virtualCursor,debug:message=>{if(params.has('debugInput'))log('input',{message:message.join(',')})},onCaptureChange:(locked,supported)=>{if($('capture'))$('capture').textContent=locked?'Mouse captured':supported?'Capture mouse':'Focus game';document.body.classList.toggle('mouse-captured',locked);}});
+  canvas.tabIndex=0;inputBinding=bindBrowserInput(canvas,{isRunning:()=>!!worker,send:message=>gpuWorker?.postMessage({type:'input',message}),unlock:()=>browserAudio.unlock(),profile:build.guest?.inputProfile??{},touchRoot:$('touch-controls'),onVirtualCursor:virtualCursor,onCursorVisibilityChange:visible=>document.body.classList.toggle('guest-cursor-hidden',!visible),debug:message=>{if(params.has('debugInput'))log('input',{message:message.join(',')})},onCaptureChange:(locked,supported)=>{if($('capture'))$('capture').textContent=locked?'Mouse captured':supported?'Capture mouse':'Focus game';document.body.classList.toggle('mouse-captured',locked);}});
   const offscreen=canvas.transferControlToOffscreen();
   const channel=new MessageChannel();gpuWorker=new Worker(new URL(`./gpu-worker.js?guest=${encodeURIComponent(build.guest.id)}&v=${workerVersion}`,import.meta.url),{type:'module'});
   gpuWorker.onmessage=worker.onmessage;gpuWorker.onerror=e=>{const detail={realm:'WebGPU worker',message:e.message||e.error?.message||'WebGPU worker terminated without an error message',filename:e.filename||null,line:e.lineno||null,column:e.colno||null};report.blocker=detail;log('worker-error',detail);stop('failed: '+detail.message)};
