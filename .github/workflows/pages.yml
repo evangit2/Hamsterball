@@ -21,10 +21,25 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out production
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: production
+      - name: Check out staging
+        uses: actions/checkout@v4
+        with:
+          ref: staging
+          path: preview
+      - name: Assemble production and preview
+        run: |
+          mkdir site
+          rsync -a --exclude=.git --exclude=.github production/ site/
+          mkdir site/preview
+          rsync -a --exclude=.git --exclude=.github preview/ site/preview/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: site
       - id: deployment
         uses: actions/deploy-pages@v4
