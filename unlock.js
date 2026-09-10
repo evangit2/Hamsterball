@@ -1,4 +1,4 @@
-import {saveUnlockPayload} from './unlock-store.js';
+import {saveUnlockPayload} from './unlock-store.js?v=scoped-runtime-1';
 
 const $ = id => document.getElementById(id);
 const dropZone = $('drop-zone');
