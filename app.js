@@ -1,7 +1,7 @@
 import {resourceMetrics,memoryProbe} from './resource-metrics.js';
 import {runtimeMode,runtimeModeInfo} from './runtime-mode.js';
 import {BrowserTrackerMusic} from './tracker-music.js';
-import {bindBrowserInput} from './browser-input.js?v=preview-input-4';
+import {bindBrowserInput} from './browser-input.js?v=preview-input-5';
 import {loadUnlockPayload} from './unlock-store.js?v=scoped-runtime-1';
 const $=id=>document.getElementById(id);
 let build,worker,gpuWorker,timer,probeWorker,inputBinding;
