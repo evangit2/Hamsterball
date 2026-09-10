@@ -1,5 +1,5 @@
 {
-  "revision": "89ff41f4c27e1e29348899535e79e1f3d1a836f3",
+  "revision": "07429088ad5e8b38a326e842b42db4d966ee544c",
   "dirty": false,
   "guest": {
     "id": "hamsterball",
@@ -8,12 +8,8 @@
     "workingDirectory": "/",
     "registryDwords": [],
     "inputProfile": {
-      "pointer": {
+      "keyboard": {
         "cursorHidden": {
-          "horizontalSign": -1,
-          "verticalSign": -1
-        },
-        "relativePointer": {
           "horizontalSign": -1,
           "verticalSign": -1
         }
@@ -42,12 +38,8 @@
       "workingDirectory": "/",
       "registryDwords": [],
       "inputProfile": {
-        "pointer": {
+        "keyboard": {
           "cursorHidden": {
-            "horizontalSign": -1,
-            "verticalSign": -1
-          },
-          "relativePointer": {
             "horizontalSign": -1,
             "verticalSign": -1
           }
@@ -2481,12 +2473,8 @@
       "workingDirectory": "/",
       "registryDwords": [],
       "inputProfile": {
-        "pointer": {
+        "keyboard": {
           "cursorHidden": {
-            "horizontalSign": -1,
-            "verticalSign": -1
-          },
-          "relativePointer": {
             "horizontalSign": -1,
             "verticalSign": -1
           }
@@ -2506,10 +2494,10 @@
     "wasmProfile": "release",
     "translatedTreeSha256": "a61cf7b018a7cbddd62c1b3043fc69bd88f8f7c462b08dff87f235f8564ecf73",
     "cargoLockSha256": "968c5d084c3a8ffaae74c4436735dad977229fbde0141ec4279b7d8a134164fd",
-    "builtAt": "2026-09-10T16:14:23.820980+00:00",
-    "revision": "89ff41f4c27e1e29348899535e79e1f3d1a836f3",
+    "builtAt": "2026-09-10T16:45:34.828975+00:00",
+    "revision": "07429088ad5e8b38a326e842b42db4d966ee544c",
     "workingTreeDirty": false,
-    "sourceSha256": "ee88e68a557731742c3bf3f6472dd6e05f919b64372129b8e24e58a99602c0dd",
+    "sourceSha256": "e8006cdc04d33a66e206e7cf11ee57b3400b92a885478be4e33015a5b0502365",
     "executableSha256": "3379e9041c7ab83abd07da1bcf974529280aeff36b3c52e7a3d3bbb93e2da94d",
     "theseusRevision": "f8c1a2351b8b605812076d2dc34e84d20d95de4b",
     "translationEntryPoints": [],
@@ -2522,8 +2510,8 @@
         "bytes": 12970
       },
       "hamsterball_bg.wasm": {
-        "sha256": "15a2a9990ee840bb0b0165febe3fa039e0f1fb1b42a309d3fb7e2551ecbc458f",
-        "bytes": 25199449
+        "sha256": "a8e46772954e34fc7183e301ded6aa31d88db25e1616a84bf93633056ded2fd7",
+        "bytes": 25199671
       }
     }
   },
@@ -2531,13 +2519,13 @@
     "url": "generated/hamsterball/hamsterball.payload",
     "algorithm": "AES-256-GCM",
     "ivBytes": 12,
-    "bytes": 4072869,
-    "sha256": "2c42ea69c6f2e1e37a301bb05c90f4b5cd72c4744833c06b6f4afa0341e494e6",
-    "plaintextSha256": "15a2a9990ee840bb0b0165febe3fa039e0f1fb1b42a309d3fb7e2551ecbc458f",
+    "bytes": 4185072,
+    "sha256": "60184b0fcc5c6f103ed3e753e98b6a386f23fca73237bc65f40d1c8fff74c50d",
+    "plaintextSha256": "a8e46772954e34fc7183e301ded6aa31d88db25e1616a84bf93633056ded2fd7",
     "keyDerivation": "SHA-256 of the exact executable bytes followed by DirectWebGPU Hamsterball guest payload v1",
     "compression": "gzip",
-    "decryptedBytes": 4072841,
-    "wasmBytes": 25199449
+    "decryptedBytes": 4185044,
+    "wasmBytes": 25199671
   },
   "assetBundle": {
     "url": "assets.bundle.gz",
