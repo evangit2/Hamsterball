@@ -4,7 +4,7 @@ This file credits third-party software used by the Hamsterball browser play harn
 
 ## Major runtime components
 
-The generated runtime comes from [DirectWebGPU](https://github.com/evangit2/DirectWebGPU) revision `02827616c7b88615059c821f6ef796524bbc933a`. DirectWebGPU’s repository does not currently contain a top-level project license, so no license is inferred for it.
+The generated runtime comes from [DirectWebGPU](https://github.com/evangit2/DirectWebGPU) revision `783bde612b84d5e2c8d7875fe495dc56f28fb74f`. DirectWebGPU’s repository does not currently contain a top-level project license, so no license is inferred for it.
 
 | Component | Use in the browser runtime | Version or revision | License and notice |
 | --- | --- | --- | --- |
