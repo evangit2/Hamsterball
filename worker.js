@@ -1,5 +1,5 @@
 import {resourceMetrics} from './resource-metrics.js';
-import {DrawBatch} from './draw-batch.js?v=shared-records-1';
+import {DrawBatch} from './draw-batch.js?v=sync-batches-1';
 import {AssetCache} from './asset-cache.js';
 import {takeSharedInput,writeInputReply} from './input-transport.js?v=preview-stalls-2';
 let memory, device, lastPanic, gpuPort, inputQueue, drawBatch, logCount=0, persistedFiles=new Map();
