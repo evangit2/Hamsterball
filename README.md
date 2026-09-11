@@ -2,6 +2,8 @@
 
 A browser play harness for a user-supplied `Hamsterball.exe`, powered by [DirectWebGPU](https://github.com/evangit2/DirectWebGPU). The executable stays inside the browser tab and is never uploaded.
 
+[Theseus](https://github.com/evmar/theseus) is a major component of the runtime. It translates the original 32-bit x86 Windows executable into Rust/WebAssembly and provides the DOS/Win32 environment that DirectWebGPU extends with Direct3D, input, audio, and browser integration. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for all credited runtime components, pinned versions, licenses, and retained notice files.
+
 ## Use it
 
 1. Open <https://evangit2.github.io/Hamsterball/>.
