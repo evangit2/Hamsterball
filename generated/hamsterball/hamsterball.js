@@ -43,6 +43,26 @@ export function seed_registry_dword(root, subkey, name, value) {
 }
 
 /**
+ * @param {number} root
+ * @param {string} subkey
+ * @param {string} name
+ * @param {number} kind
+ * @param {Uint8Array} value
+ */
+export function seed_registry_value(root, subkey, name, kind, value) {
+    const ptr0 = passStringToWasm0(subkey, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passArray8ToWasm0(value, wasm.__wbindgen_malloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.seed_registry_value(root, ptr0, len0, ptr1, len1, kind, ptr2, len2);
+    if (ret[1]) {
+        throw takeFromExternrefTable0(ret[0]);
+    }
+}
+
+/**
  * Set the directory the program starts in, the equivalent of launching it
  * from that directory natively.
  * @param {string} path
