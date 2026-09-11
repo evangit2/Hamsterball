@@ -73,11 +73,18 @@ self.send_to_host=(func,args,retAddr)=>{
    const copy=new Uint8Array(values[1]);copy.set(new Uint8Array(memory.buffer,values[0],values[1]));
    gpuPort.postMessage({func,args:[values[1],values[2]],payload:copy.buffer,buffer:memory.buffer,retAddr},[copy.buffer]);return;
   }
-  if(func==='graphics_call'&&[3,6,11,13].includes(values[0])){
+  if(func==='graphics_call'&&[3,4,6,11,13].includes(values[0])){
    if(!Number.isInteger(retAddr)||retAddr<4||retAddr%4||retAddr+4>memory.buffer.byteLength)throw Error('invalid queued draw reply pointer');
-   if(drawBatch.enqueue(values,memory.buffer)){Atomics.store(new Int32Array(memory.buffer),retAddr/4,1);return;}
+   if(drawBatch.enqueue(values,memory.buffer)){
+    // Present is the frame boundary. Posting it in the batch keeps all work
+    // ordered and lets the GPU worker retain this ring slot until the submitted
+    // frame actually completes. A second slot still lets the translated CPU
+    // prepare one frame ahead without creating an unbounded WebGPU queue.
+    if(values[0]===4)drawBatch.flush();
+    Atomics.store(new Int32Array(memory.buffer),retAddr/4,1);return;
+   }
   }
-  drawBatch.flush();
+  drawBatch.drain();
   gpuPort.postMessage({func,args:values,buffer:memory.buffer,retAddr});return;
  }
  // Unsupported host operations fail locally instead of leaving a blocked worker.

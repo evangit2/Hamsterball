@@ -5,7 +5,7 @@ import {bindBrowserInput} from './browser-input.js?v=preview-input-12';
 import {loadUnlockPayload} from './unlock-store.js?v=scoped-runtime-1';
 import {audioQueueNeedsReset} from './audio-scheduling.js?v=preview-input-12';
 const $=id=>document.getElementById(id);
-let build,worker,gpuWorker,inputWorker,timer,probeWorker,inputBinding,activeRegistryPreset=null;
+let build,worker,gpuWorker,inputWorker,timer,probeWorker,inputBinding,activeRegistryPreset=null,launchGeneration=0;
 const selectedMode=runtimeMode(),selectedModeInfo=runtimeModeInfo(selectedMode);
 const gameHarness=document.body.dataset.harness==='game';
 const coarsePointer=globalThis.matchMedia?.('(pointer: coarse)')?.matches??false;
@@ -70,16 +70,19 @@ function log(type,data={}){report.events.push({timeMs:Math.round(performance.now
 function diagnosticsText(){return JSON.stringify({summary:report.status,location:location.href,report},null,2)}
 function downloadDiagnostics(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([diagnosticsText()],{type:'application/json'}));a.download=`${build?.guest?.id??'directwebgpu'}-${report.runId??'probe'}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
 function crashActions(status){const button=$('crash-details');if(!button)return;const crashed=!!report.blocker||/^(failed:|gpu-error:|gpu-lost:|startup watchdog:)/.test(status);button.hidden=!crashed;if(crashed)$('crash-output').textContent=diagnosticsText();}
-function stop(status='stopped'){clearTimeout(timer);timer=null;inputBinding?.release();inputBinding?.destroy();inputBinding=null;worker?.terminate();worker=null;gpuWorker?.terminate();gpuWorker=null;inputWorker?.terminate();inputWorker=null;browserMusic.reset();browserAudio.reset();report.status=status;report.endedAt=new Date().toISOString();report.diagnosticAttemptMs=report.startTimeMs?performance.now()-report.startTimeMs:0;$('status').textContent=status;$('start').disabled=false;$('long').disabled=false;$('stop').disabled=true;if($('restart'))$('restart').disabled=false;document.body.classList.remove('running');crashActions(status)}
+function stop(status='stopped'){launchGeneration++;clearTimeout(timer);timer=null;inputBinding?.release();inputBinding?.destroy();inputBinding=null;worker?.terminate();worker=null;gpuWorker?.terminate();gpuWorker=null;inputWorker?.terminate();inputWorker=null;browserMusic.reset();browserAudio.reset();report.status=status;report.endedAt=new Date().toISOString();report.diagnosticAttemptMs=report.startTimeMs?performance.now()-report.startTimeMs:0;$('status').textContent=status;$('start').disabled=false;$('long').disabled=false;$('stop').disabled=true;if($('restart'))$('restart').disabled=false;document.body.classList.remove('running');crashActions(status)}
 async function start(long=false,registryPreset=null){
  if(worker||!build||$('start').disabled)return;
+ const generation=++launchGeneration;
  const audioUnlock=browserAudio.unlock();
  $('start').disabled=true;$('long').disabled=true;
  const prerequisite=prerequisiteError();if(prerequisite){report.environment=runtimeEnvironment();report.blocker=prerequisite;$('status').textContent=prerequisite;$('start').disabled=false;$('long').disabled=false;return;}
  if(coarsePointer)await Promise.race([audioUnlock,new Promise(resolve=>setTimeout(()=>resolve(false),750))]);
+ if(generation!==launchGeneration)return;
  try{
   const params=new URL(location.href).searchParams,measurementMs=params.has('benchmark')?benchmarkDuration():null;
   const unlocked=await loadUnlockPayload(build.dependencies.executable.sha256,build.encryptedGuest.plaintextSha256);
+  if(generation!==launchGeneration)return;
   probeWorker?.terminate();probeWorker=null;
   activeRegistryPreset=registryPreset;report={applicationPresents:0,submittedFrames:0,sceneFrames:0,performance:{firstSceneMs:'not measured',fps:'not measured',jsHeapBytes:'not measured',gpuBytes:'not measured'},runtime:selectedModeInfo,environment:runtimeEnvironment(),registryPreset,runId:crypto.randomUUID(),status:'starting',events:[],droppedEvents:0,build:reportBuild(build),startTimeMs:performance.now(),startedAt:new Date().toISOString(),requestedDurationMs:long?14400000:new URL(location.href).searchParams.has('benchmark')?measurementMs:null,visibility:document.visibilityState};
   $('crash-details').hidden=true;$('crash-dialog')?.close();
@@ -133,10 +136,10 @@ async function start(long=false,registryPreset=null){
   // Ordinary play/test sessions keep running. This only catches startup
   // failures; the first Present clears it. Long sessions keep a 4-hour cap.
   timer=setTimeout(()=>stop(long?'session deadline reached':'startup watchdog: no Present within 60 seconds'),long?14400000:60000);
- }catch(e){log('failed',{message:e.message});stop('failed: '+e.message)}
+ }catch(e){if(generation!==launchGeneration)return;log('failed',{message:e.message});stop('failed: '+e.message)}
 }
 $('start').onclick=()=>start();$('long').onclick=()=>start(true);$('stop').onclick=()=>stop();
-$('restart')?.addEventListener('click',()=>{if(worker)stop('restarting');setTimeout(()=>start(false,activeRegistryPreset),0)});
+$('restart')?.addEventListener('click',()=>{stop('restarting');setTimeout(()=>start(false,activeRegistryPreset),0)});
 $('capture')?.addEventListener('click',()=>inputBinding?.capture());
 $('fullscreen')?.addEventListener('click',()=>void(document.fullscreenElement?document.exitFullscreen():$('stage')?.requestFullscreen?.()));
 document.addEventListener('fullscreenchange',()=>{if($('fullscreen'))$('fullscreen').textContent=document.fullscreenElement?'Exit fullscreen':'Fullscreen'});
@@ -152,7 +155,7 @@ try{
  const response=await fetch('./build-manifest.json',{cache:'no-store'});
  if(!response.ok)throw Error('build manifest '+response.status);
  build=await response.json();if(!Array.isArray(build.files)||!build.dependencies?.executable||!build.guest?.title)throw Error('invalid build manifest');report.build=reportBuild(build);
- if(gameHarness){for(const [name,preset] of Object.entries(build.guest.registryPresets??{})){if(!/^[a-z0-9-]{1,64}$/.test(name)||typeof preset?.label!=='string'||!preset.label||preset.label.length>40||!Array.isArray(preset.values))throw Error('invalid guest registry preset');const button=document.createElement('button');button.type='button';button.textContent=preset.label;button.dataset.registryPreset=name;button.addEventListener('click',()=>{if(worker)stop(`restarting with ${name}`);setTimeout(()=>start(false,name),0)});$('restart').before(button);}}
+ if(gameHarness){for(const [name,preset] of Object.entries(build.guest.registryPresets??{})){if(!/^[a-z0-9-]{1,64}$/.test(name)||typeof preset?.label!=='string'||!preset.label||preset.label.length>40||!Array.isArray(preset.values))throw Error('invalid guest registry preset');const button=document.createElement('button');button.type='button';button.textContent=preset.label;button.dataset.registryPreset=name;button.addEventListener('click',()=>{stop(`restarting with ${name}`);setTimeout(()=>start(false,name),0)});$('restart').before(button);}}
  $('runtime').textContent=`Runtime: Theseus x86 → WASM · Graphics: ${selectedModeInfo.shaderCompiler} → WebGPU · Mode: ${selectedMode}${selectedModeInfo.deprecated?' (deprecated)':''}`;
  document.title=`${build.guest.title} · DirectWebGPU`;$('title').textContent=gameHarness?build.guest.title:`${build.guest.title} binary runtime`;$('start').textContent=`Start ${build.guest.title}`;$('revision').textContent=`Loading ${build.guest.title} runtime…`;
  $('start').disabled=false;$('long').disabled=false;
