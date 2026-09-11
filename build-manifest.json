@@ -1,5 +1,5 @@
 {
-  "revision": "4a54f9545d0d7d9fe6546a89f3a020afb4a6aa6e",
+  "revision": "14fd542cc3a4af1e3394a5ac8a8fd488645beb9e",
   "dirty": false,
   "guest": {
     "id": "hamsterball",
@@ -4558,10 +4558,10 @@
     "wasmProfile": "release",
     "translatedTreeSha256": "78fe58103af0907f1645dc5a08d2063e4303279ca39eac9fb9717c951c34aa82",
     "cargoLockSha256": "968c5d084c3a8ffaae74c4436735dad977229fbde0141ec4279b7d8a134164fd",
-    "builtAt": "2026-09-11T03:54:18.389155+00:00",
-    "revision": "4a54f9545d0d7d9fe6546a89f3a020afb4a6aa6e",
+    "builtAt": "2026-09-11T14:42:45.055836+00:00",
+    "revision": "14fd542cc3a4af1e3394a5ac8a8fd488645beb9e",
     "workingTreeDirty": false,
-    "sourceSha256": "5f0041fb87d951e3afd8474fd52631349f18c2c99589bd908641a24b0b76567d",
+    "sourceSha256": "ffc143b22bba68d430cb8d0e47af57938dc4fe5a8a12776559d1b9cef3bb80d3",
     "executableSha256": "3379e9041c7ab83abd07da1bcf974529280aeff36b3c52e7a3d3bbb93e2da94d",
     "theseusRevision": "f8c1a2351b8b605812076d2dc34e84d20d95de4b",
     "translationEntryPoints": [
@@ -4572,12 +4572,12 @@
     "wasmArtifact": "hamsterball_bg.wasm",
     "artifacts": {
       "hamsterball.js": {
-        "sha256": "19bd2ac64cba86ebb580066d8af9afe3dc4640b730d4e6e28100223ee222c1d5",
-        "bytes": 13693
+        "sha256": "bee0c5d2b7aca1a3b9f8bd044f573cf6e5aa9f25a4f88bda651d533c7a48c92e",
+        "bytes": 13831
       },
       "hamsterball_bg.wasm": {
-        "sha256": "abf3a341d8aa22c327f2cf5bcf8d08677f472bb70a0536e29b0d433c5b746301",
-        "bytes": 26984009
+        "sha256": "80a83e26aa034d63c703c8c4ccda349aa6d888b05621cad7056c742ac7d64c41",
+        "bytes": 25735758
       }
     }
   },
@@ -4585,13 +4585,13 @@
     "url": "generated/hamsterball/hamsterball.payload",
     "algorithm": "AES-256-GCM",
     "ivBytes": 12,
-    "bytes": 4237782,
-    "sha256": "7c038516b6724b1aca8ad68aff441e44f760fb8befd55cb588e27c5f2f3d1070",
-    "plaintextSha256": "abf3a341d8aa22c327f2cf5bcf8d08677f472bb70a0536e29b0d433c5b746301",
+    "bytes": 3992055,
+    "sha256": "6875b5e85399260a238ff2fcc0fec0b21740af69697115ba8075e46b24f50aca",
+    "plaintextSha256": "80a83e26aa034d63c703c8c4ccda349aa6d888b05621cad7056c742ac7d64c41",
     "keyDerivation": "SHA-256 of the exact executable bytes followed by DirectWebGPU Hamsterball guest payload v1",
     "compression": "gzip",
-    "decryptedBytes": 4237754,
-    "wasmBytes": 26984009
+    "decryptedBytes": 3992027,
+    "wasmBytes": 25735758
   },
   "assetBundle": {
     "url": "assets.bundle.gz",

@@ -1,7 +1,7 @@
 import {resourceMetrics} from './resource-metrics.js';
 import {DrawBatch} from './draw-batch.js';
 import {AssetCache} from './asset-cache.js';
-import {takeSharedInput,writeInputReply} from './input-transport.js?v=preview-runtime-cpu-1';
+import {takeSharedInput,writeInputReply} from './input-transport.js?v=preview-stalls-2';
 let memory, device, lastPanic, gpuPort, inputQueue, drawBatch, logCount=0, persistedFiles=new Map();
 const send=(type,data={})=>{if(type==='log'&&String(data.message).startsWith('GUEST_MEMORY ')){postMessage({type:'guest-memory',sample:JSON.parse(String(data.message).slice(13))});return;}if(type==='log'&&String(data.message).includes('kernel32/heap.rs:'))return;if(type==='log'&&String(data.message).includes('D3D9_CREATE9 sdk='))postMessage({type:'d3d9-created',message:data.message});if(type==='log'&&++logCount>500&&!String(data.message).includes('panicked at'))return;postMessage({type,...data})};
 const text=(value)=>String(value).slice(0,4096);
@@ -127,6 +127,7 @@ self.onmessage=async({data})=>{
   if(await hash(wasmBytes)!==wasmEntry.sha256)throw Error('WASM artifact hash mismatch');
   if(build.runtimeBuild.executableSha256!==actual)throw Error('WASM was built for a different EXE');
   await exe.default({memory,module_or_path:wasmBytes});
+  if(typeof exe.input_queue_address==='function')postMessage({type:'input-queue-ready',buffer:memory.buffer,address:exe.input_queue_address()});
   for(const f of build.files){
    const fileBytes=f.path===exeFile.path?new Uint8Array(bytes):bundledFiles.get(f.path);
    if(!fileBytes)throw Error('asset missing from verified bundle: '+f.path);

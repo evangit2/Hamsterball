@@ -7,6 +7,14 @@ export function configure_guest_memory_metrics(enabled) {
     wasm.configure_guest_memory_metrics(enabled);
 }
 
+/**
+ * @returns {number}
+ */
+export function input_queue_address() {
+    const ret = wasm.input_queue_address();
+    return ret >>> 0;
+}
+
 export function main() {
     wasm.main();
 }
